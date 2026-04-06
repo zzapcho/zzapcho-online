@@ -4,11 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [created]
   workflow_dispatch:
-    inputs:
-      version:
-        description: '버전 (예: v1.0.2)'
-        required: true
 
 jobs:
   build:

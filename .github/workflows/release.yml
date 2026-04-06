@@ -3,7 +3,12 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'   # v1.0.0, v1.0.1 등 태그를 push하면 빌드 & 릴리즈
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '버전 (예: v1.0.2)'
+        required: true
 
 jobs:
   build:

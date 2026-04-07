@@ -446,11 +446,12 @@ async function loadPresets() {
       }
       currentPresetId = preset.id;
       selectedName.textContent = preset.name;
-      await window.launcher.setSettings({ selectedPreset: preset.id });
       list.classList.remove('open');
       list.querySelectorAll('.preset-option').forEach(o =>
         o.classList.toggle('selected', o.textContent === preset.name)
       );
+      // setSettings 호출 제거 — setup:run 내부에서 selectedPreset 저장
+      // (미리 저장하면 이전/새 프리셋 비교가 불가능해짐)
       await runSetup();
       refreshServerStatus();
     });

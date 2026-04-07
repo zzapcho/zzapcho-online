@@ -9,6 +9,7 @@ const DATA_PATH = path.join(app.getPath('appData'), 'zzapchoLauncher');
 const GAME_PATH = path.join(DATA_PATH, 'minecraft');
 const SETTINGS_FILE = path.join(DATA_PATH, 'settings.json');
 const AUTH_FILE = path.join(DATA_PATH, 'auth.json');
+const USER_FILES_PATH = path.join(DATA_PATH, 'user_files'); // 프리셋별 사용자 파일 저장소
 
 function getManifestCacheFile(presetId) {
   return path.join(DATA_PATH, 'manifest_' + (presetId || 'default') + '.json');
@@ -32,7 +33,58 @@ const VALID_FILE_CATS = ['mods', 'resourcepacks', 'shaderpacks'];
 // ─── Utilities ───────────────────────────────────────────────
 
 function ensureDirs() {
-  [DATA_PATH, GAME_PATH].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+  [DATA_PATH, GAME_PATH, USER_FILES_PATH].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+}
+
+// 사용자 파일 스태시 경로
+function getUserStashDir(presetId, category) {
+  return path.join(USER_FILES_PATH, presetId, category);
+}
+
+// 현재 게임 디렉토리의 사용자 파일(서버 파일 제외)을 스태시에 저장
+function stashUserFiles(presetId, manifest) {
+  for (const cat of VALID_FILE_CATS) {
+    const serverNames = new Set(
+      (manifest?.files || [])
+        .filter(f => f.path.startsWith(cat + '/'))
+        .map(f => path.basename(f.path))
+    );
+    const dirPath = path.join(GAME_PATH, cat);
+    if (!fs.existsSync(dirPath)) continue;
+    const stashDir = getUserStashDir(presetId, cat);
+    fs.mkdirSync(stashDir, { recursive: true });
+    // 기존 스태시 초기화 후 현재 사용자 파일 저장
+    try { fs.readdirSync(stashDir).forEach(f => fs.unlinkSync(path.join(stashDir, f))); } catch {}
+    for (const f of fs.readdirSync(dirPath)) {
+      if (!serverNames.has(f) && !f.endsWith('.tmp')) {
+        try { fs.copyFileSync(path.join(dirPath, f), path.join(stashDir, f)); } catch {}
+      }
+    }
+  }
+}
+
+// 게임 디렉토리의 mods/resourcepacks/shaderpacks 전체 초기화
+function wipeGameFileDirs() {
+  for (const cat of VALID_FILE_CATS) {
+    const dirPath = path.join(GAME_PATH, cat);
+    if (!fs.existsSync(dirPath)) continue;
+    for (const f of fs.readdirSync(dirPath)) {
+      try { fs.unlinkSync(path.join(dirPath, f)); } catch {}
+    }
+  }
+}
+
+// 스태시에서 게임 디렉토리로 사용자 파일 복원
+function restoreUserFiles(presetId) {
+  for (const cat of VALID_FILE_CATS) {
+    const stashDir = getUserStashDir(presetId, cat);
+    if (!fs.existsSync(stashDir)) continue;
+    const destDir = path.join(GAME_PATH, cat);
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const f of fs.readdirSync(stashDir)) {
+      try { fs.copyFileSync(path.join(stashDir, f), path.join(destDir, f)); } catch {}
+    }
+  }
 }
 
 function readJson(filePath, fallback) {
@@ -171,16 +223,21 @@ ipcMain.handle('setup:run', async (_, manifest) => {
   const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
   const previousPresetId = settings.selectedPreset;
 
-  // 프리셋 변경 시 이전 프리셋의 서버 관리 파일 삭제
+  // 프리셋 전환 처리
   if (presetId && previousPresetId && presetId !== previousPresetId) {
+    // 1. 현재 사용자 파일을 이전 프리셋 스태시에 저장
     const oldManifest = readJson(getManifestCacheFile(previousPresetId), null);
-    if (oldManifest?.files) {
-      for (const f of oldManifest.files) {
-        const safePath = path.normalize(f.path).replace(/^(\.\.[\\/])+/, '');
-        const lp = path.join(GAME_PATH, safePath);
-        try { if (fs.existsSync(lp)) fs.unlinkSync(lp); } catch {}
-      }
-    }
+    stashUserFiles(previousPresetId, oldManifest);
+
+    // 2. mods/resourcepacks/shaderpacks 전체 초기화
+    wipeGameFileDirs();
+
+    // 3. 새 프리셋의 사용자 파일 복원
+    restoreUserFiles(presetId);
+
+    // 4. 새 프리셋의 서버 파일 강제 재다운로드를 위해 캐시 삭제
+    const newCache = getManifestCacheFile(presetId);
+    try { if (fs.existsSync(newCache)) fs.unlinkSync(newCache); } catch {}
   }
 
   // 현재 선택된 프리셋 저장
@@ -391,13 +448,18 @@ ipcMain.handle('files:add', async (_, category, filePaths) => {
   if (!VALID_FILE_CATS.includes(category)) return { success: false, error: '잘못된 카테고리' };
 
   try {
+    const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+    const presetId = settings.selectedPreset || CONFIG.presets?.[0]?.id;
     const destDir = path.join(GAME_PATH, category);
+    const stashDir = getUserStashDir(presetId, category);
     fs.mkdirSync(destDir, { recursive: true });
+    fs.mkdirSync(stashDir, { recursive: true });
     for (const src of filePaths) {
       if (!src || !fs.existsSync(src)) continue;
       const name = path.basename(src);
       if (!name) continue;
       fs.copyFileSync(src, path.join(destDir, name));
+      fs.copyFileSync(src, path.join(stashDir, name)); // 스태시에도 저장
     }
     return { success: true };
   } catch (e) {
@@ -424,6 +486,9 @@ ipcMain.handle('files:remove', async (_, category, fileName) => {
   try {
     const filePath = path.join(GAME_PATH, category, fileName);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // 스태시에서도 삭제
+    const stashPath = path.join(getUserStashDir(presetId, category), fileName);
+    try { if (fs.existsSync(stashPath)) fs.unlinkSync(stashPath); } catch {}
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };

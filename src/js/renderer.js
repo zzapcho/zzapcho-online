@@ -29,7 +29,6 @@ const els = {
   progressFill:         document.getElementById('progress-fill'),
   progressText:         document.getElementById('progress-text'),
   // Settings
-  settingVersionDisplay: document.getElementById('setting-version-display'),
   settingRamMin:        document.getElementById('setting-ram-min'),
   settingRamMax:        document.getElementById('setting-ram-max'),
   ramMinValue:          document.getElementById('ram-min-value'),
@@ -42,6 +41,9 @@ const els = {
   logBody:              document.getElementById('log-body'),
   clearLogBtn:          document.getElementById('btn-clear-log')
 };
+
+// 현재 선택된 프리셋 ID
+let currentPresetId = null;
 
 // ─── View helpers ─────────────────────────────────────────────
 function showView(name) {
@@ -120,7 +122,7 @@ async function runSetup() {
   let manifest = null;
 
   try {
-    const check = await window.launcher.checkUpdate();
+    const check = await window.launcher.checkUpdate(currentPresetId);
     if (check.manifest) {
       manifest = check.manifest;
       els.gameVersion.textContent = manifest.gameVersion || '1.21.1';
@@ -135,7 +137,6 @@ async function runSetup() {
     els.playBtn.disabled = false;
     if (manifest?.gameVersion) {
       els.gameVersion.textContent = manifest.gameVersion;
-      if (els.settingVersionDisplay) els.settingVersionDisplay.textContent = manifest.gameVersion;
       updateModloaderBadge(manifest.modLoader);
     }
   } else {
@@ -162,13 +163,12 @@ els.playBtn.addEventListener('click', async () => {
   els.playBtn.disabled = true;
   els.playBtn.innerHTML = '<span>파일 확인 중...</span>';
 
-  // 게임 실행 전 파일 최신화
   showSetupBox();
   setSetupStatus('게임 파일 확인 중...', 0);
 
   let manifest = null;
   try {
-    const check = await window.launcher.checkUpdate();
+    const check = await window.launcher.checkUpdate(currentPresetId);
     if (check.manifest) {
       manifest = check.manifest;
       els.gameVersion.textContent = manifest.gameVersion || '1.21.1';
@@ -185,7 +185,6 @@ els.playBtn.addEventListener('click', async () => {
     return;
   }
 
-  // 이제 게임 실행
   els.playBtn.innerHTML = '<span>게임 준비 중...</span>';
   els.progressSection.classList.add('visible');
   els.progressFill.style.width = '0%';
@@ -238,7 +237,7 @@ function appendLog(text) {
   else if (lower.includes('[info]')) line.classList.add('info');
   line.textContent = text;
   els.logBody.appendChild(line);
-  els.logBody.scrollTop = els.logBody.scrollHeight; // 항상 맨 아래로
+  els.logBody.scrollTop = els.logBody.scrollHeight;
 }
 
 function updateModloaderBadge(ml) {
@@ -352,7 +351,6 @@ document.querySelectorAll('.drop-zone').forEach(zone => {
 
 // ─── Server Status ────────────────────────────────────────────
 
-// 플레이어 이름 툴팁 요소
 const _tooltip = document.createElement('div');
 _tooltip.className = 'player-tooltip';
 _tooltip.style.display = 'none';
@@ -384,7 +382,6 @@ async function refreshServerStatus() {
       </div>`;
   }).join('');
 
-  // 툴팁 이벤트
   list.querySelectorAll('.server-players[data-players]').forEach(el => {
     el.addEventListener('mouseenter', e => {
       const names = e.currentTarget.dataset.players?.trim();
@@ -407,6 +404,58 @@ function _positionTooltip(e) {
   if (y < 0) y = e.clientY + 16;
   _tooltip.style.left = x + 'px';
   _tooltip.style.top  = y + 'px';
+}
+
+// ─── Preset Selector ──────────────────────────────────────────
+
+function initPresetDropdown() {
+  const btn = document.getElementById('preset-dropdown-btn');
+  const list = document.getElementById('preset-dropdown-list');
+  if (!btn || !list) return;
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    list.classList.toggle('open');
+  };
+
+  document.addEventListener('click', () => list.classList.remove('open'));
+}
+
+async function loadPresets() {
+  const presets = await window.launcher.listPresets();
+  const settings = await window.launcher.getSettings();
+  currentPresetId = settings.selectedPreset || presets[0]?.id;
+
+  const selectedName = document.getElementById('preset-selected-name');
+  const list = document.getElementById('preset-dropdown-list');
+  if (!selectedName || !list) return;
+
+  const current = presets.find(p => p.id === currentPresetId) || presets[0];
+  selectedName.textContent = current?.name || '선택';
+
+  list.innerHTML = '';
+  for (const preset of presets) {
+    const opt = document.createElement('div');
+    opt.className = 'preset-option' + (preset.id === currentPresetId ? ' selected' : '');
+    opt.textContent = preset.name;
+    opt.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (preset.id === currentPresetId) {
+        list.classList.remove('open');
+        return;
+      }
+      currentPresetId = preset.id;
+      selectedName.textContent = preset.name;
+      await window.launcher.setSettings({ selectedPreset: preset.id });
+      list.classList.remove('open');
+      list.querySelectorAll('.preset-option').forEach(o =>
+        o.classList.toggle('selected', o.textContent === preset.name)
+      );
+      await runSetup();
+      refreshServerStatus();
+    });
+    list.appendChild(opt);
+  }
 }
 
 // ─── Navigation ───────────────────────────────────────────────
@@ -465,12 +514,14 @@ document.getElementById('btn-close').addEventListener('click',    () => window.l
 // ─── Init ─────────────────────────────────────────────────────
 async function init() {
   await loadSettings();
+  initPresetDropdown();
+  await loadPresets();
   const auth = await window.launcher.checkAuth();
   if (auth.loggedIn) {
     setProfile(auth.name, auth.uuid);
     await runSetup();
     refreshServerStatus();
-    setInterval(refreshServerStatus, 30000); // 30초마다 갱신
+    setInterval(refreshServerStatus, 30000);
   }
 }
 

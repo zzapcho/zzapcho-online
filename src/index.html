@@ -123,6 +123,17 @@
           <div class="server-status-wrap" id="server-status-wrap" style="display:none;">
             <div id="server-list-status"></div>
           </div>
+
+          <!-- 프리셋 선택 -->
+          <div class="preset-selector-wrap">
+            <div class="preset-dropdown" id="preset-dropdown">
+              <button class="preset-dropdown-btn" id="preset-dropdown-btn">
+                <span id="preset-selected-name">로딩 중...</span>
+                <span class="preset-arrow">▾</span>
+              </button>
+              <div class="preset-dropdown-list" id="preset-dropdown-list"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -189,11 +200,6 @@
 
         <div class="settings-section">
           <div class="settings-section-title">게임</div>
-
-          <div class="settings-group">
-            <label>게임 버전 <span class="hint">(자동 설정)</span></label>
-            <div class="version-readonly" id="setting-version-display">1.21.1</div>
-          </div>
 
           <div class="settings-group">
             <label>최소 RAM</label>

@@ -6,12 +6,15 @@ contextBridge.exposeInMainWorld('launcher', {
   checkAuth: () => ipcRenderer.invoke('auth:check'),
   logout:    () => ipcRenderer.invoke('auth:logout'),
 
+  // Presets
+  listPresets: () => ipcRenderer.invoke('presets:list'),
+
   // Setup
   runSetup:        (manifest) => ipcRenderer.invoke('setup:run', manifest),
   onSetupProgress: (cb) => ipcRenderer.on('setup:progress', (_, d) => cb(d)),
 
-  // Update check
-  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  // Update check (presetId 전달)
+  checkUpdate: (presetId) => ipcRenderer.invoke('update:check', presetId),
 
   // Game
   launch:           () => ipcRenderer.invoke('game:launch'),

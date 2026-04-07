@@ -9,9 +9,12 @@ const DATA_PATH = path.join(app.getPath('appData'), 'zzapchoLauncher');
 const GAME_PATH = path.join(DATA_PATH, 'minecraft');
 const SETTINGS_FILE = path.join(DATA_PATH, 'settings.json');
 const AUTH_FILE = path.join(DATA_PATH, 'auth.json');
-const MANIFEST_CACHE_FILE = path.join(DATA_PATH, 'manifest.json');
 
-// 앱 루트의 launcher.config.json에서 설정 로드 (manifestUrl 하드코딩)
+function getManifestCacheFile(presetId) {
+  return path.join(DATA_PATH, 'manifest_' + (presetId || 'default') + '.json');
+}
+
+// 앱 루트의 launcher.config.json에서 설정 로드
 const CONFIG = (() => {
   try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'launcher.config.json'), 'utf-8')); }
   catch { return {}; }
@@ -20,7 +23,8 @@ const CONFIG = (() => {
 const DEFAULT_SETTINGS = {
   ram: { min: 2, max: 4 },
   resolution: { width: 1280, height: 720 },
-  javaPath: ''
+  javaPath: '',
+  selectedPreset: CONFIG.presets?.[0]?.id || 'mcserver1'
 };
 
 const VALID_FILE_CATS = ['mods', 'resourcepacks', 'shaderpacks'];
@@ -150,13 +154,39 @@ ipcMain.handle('auth:logout', () => {
   return { success: true };
 });
 
+// ─── Presets ─────────────────────────────────────────────────
+
+ipcMain.handle('presets:list', () => CONFIG.presets || []);
+
 // ─── Setup (Java + ModLoader + Files + Servers) ──────────────
 
 ipcMain.handle('setup:run', async (_, manifest) => {
   const { detectJava, downloadJava } = require('./lib/java');
   const modloader = require('./lib/modloader');
   const { writeServersDat } = require('./lib/servers');
+
+  const presetId = manifest?._presetId;
+  const MANIFEST_CACHE = getManifestCacheFile(presetId || 'default');
+
   const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const previousPresetId = settings.selectedPreset;
+
+  // 프리셋 변경 시 이전 프리셋의 서버 관리 파일 삭제
+  if (presetId && previousPresetId && presetId !== previousPresetId) {
+    const oldManifest = readJson(getManifestCacheFile(previousPresetId), null);
+    if (oldManifest?.files) {
+      for (const f of oldManifest.files) {
+        const safePath = path.normalize(f.path).replace(/^(\.\.[\\/])+/, '');
+        const lp = path.join(GAME_PATH, safePath);
+        try { if (fs.existsSync(lp)) fs.unlinkSync(lp); } catch {}
+      }
+    }
+  }
+
+  // 현재 선택된 프리셋 저장
+  if (presetId) {
+    writeJson(SETTINGS_FILE, { ...settings, selectedPreset: presetId });
+  }
 
   try {
     // ── 1. Java ──────────────────────────────────────────────
@@ -171,7 +201,7 @@ ipcMain.handle('setup:run', async (_, manifest) => {
       });
     }
 
-    writeJson(SETTINGS_FILE, { ...settings, javaPath });
+    writeJson(SETTINGS_FILE, { ...readJson(SETTINGS_FILE, DEFAULT_SETTINGS), javaPath });
 
     // ── 2. 모드 로더 ─────────────────────────────────────────
     let versionId = null;
@@ -198,7 +228,7 @@ ipcMain.handle('setup:run', async (_, manifest) => {
 
     // ── 3. 파일 업데이트 ──────────────────────────────────────
     sendSetupProgress('파일 업데이트 확인 중...', 55);
-    const localManifest = readJson(MANIFEST_CACHE_FILE, null);
+    const localManifest = readJson(MANIFEST_CACHE, null);
 
     if (manifest && (localManifest?.version !== manifest.version)) {
       const filesToDownload = [];
@@ -209,7 +239,6 @@ ipcMain.handle('setup:run', async (_, manifest) => {
         if (localMd5 !== file.md5) filesToDownload.push({ ...file, path: safePath });
       }
 
-      // 항상 강제 삭제 (사용자 토글 없음)
       const filesToDelete = [];
       if (localManifest) {
         const newPaths = new Set((manifest.files || []).map(f => f.path));
@@ -234,11 +263,10 @@ ipcMain.handle('setup:run', async (_, manifest) => {
         if (fs.existsSync(lp)) fs.unlinkSync(lp);
       }
 
-      writeJson(MANIFEST_CACHE_FILE, manifest);
+      writeJson(MANIFEST_CACHE, manifest);
     }
 
     // ── 4. 서버 목록 ─────────────────────────────────────────
-    // manifest가 없으면 캐시된 로컬 manifest의 서버도 사용
     const serverSource = manifest || localManifest;
     if (serverSource?.servers?.length > 0) {
       sendSetupProgress('서버 목록 설정 중...', 92);
@@ -254,22 +282,26 @@ ipcMain.handle('setup:run', async (_, manifest) => {
 
 // ─── Update Check ─────────────────────────────────────────────
 
-ipcMain.handle('update:check', async () => {
+ipcMain.handle('update:check', async (_, presetId) => {
   try {
-    const manifestUrl = CONFIG.manifestUrl;
-    if (!manifestUrl) return { skipped: true };
+    const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+    const pid = presetId || settings.selectedPreset || CONFIG.presets?.[0]?.id;
+    const preset = (CONFIG.presets || []).find(p => p.id === pid) || CONFIG.presets?.[0];
+    if (!preset?.manifestUrl) return { skipped: true };
 
-    const manifest = await fetchJson(manifestUrl);
-    const local = readJson(MANIFEST_CACHE_FILE, null);
+    const manifest = await fetchJson(preset.manifestUrl);
+    const local = readJson(getManifestCacheFile(pid), null);
 
     return {
       hasUpdate: !local || local.version !== manifest.version,
       currentVersion: local?.version || null,
       newVersion: manifest.version,
-      manifest
+      manifest: { ...manifest, _presetId: pid }
     };
   } catch (e) {
-    return { hasUpdate: false, error: e.message, manifest: readJson(MANIFEST_CACHE_FILE, null) };
+    const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+    const pid = presetId || settings.selectedPreset || CONFIG.presets?.[0]?.id;
+    return { hasUpdate: false, error: e.message, manifest: readJson(getManifestCacheFile(pid), null) };
   }
 });
 
@@ -281,7 +313,8 @@ ipcMain.handle('game:launch', async () => {
   try {
     const { Client } = require('minecraft-launcher-core');
     const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
-    const localManifest = readJson(MANIFEST_CACHE_FILE, null);
+    const presetId = settings.selectedPreset || CONFIG.presets?.[0]?.id;
+    const localManifest = readJson(getManifestCacheFile(presetId), null);
     const launcher = new Client();
 
     launcher.on('progress', e => mainWindow?.webContents.send('game:progress', e));
@@ -289,7 +322,6 @@ ipcMain.handle('game:launch', async () => {
     launcher.on('close', code => mainWindow?.webContents.send('game:closed', code));
     launcher.on('data', e => mainWindow?.webContents.send('game:log', e));
 
-    // 게임 실행 직전 servers.dat 재작성 (항상 최신 상태 유지)
     const { writeServersDat: wsd } = require('./lib/servers');
     const mf = localManifest;
     if (mf?.servers?.length > 0) wsd(GAME_PATH, mf.servers);
@@ -314,7 +346,7 @@ ipcMain.handle('game:launch', async () => {
         fullscreen: false
       },
       overrides: {
-        gameDirectory: GAME_PATH   // --gameDir 명시적 지정 (servers.dat 경로 보장)
+        gameDirectory: GAME_PATH
       }
     };
 
@@ -330,7 +362,9 @@ ipcMain.handle('game:launch', async () => {
 ipcMain.handle('files:list', async (_, category) => {
   if (!VALID_FILE_CATS.includes(category)) return { server: [], user: [] };
 
-  const localManifest = readJson(MANIFEST_CACHE_FILE, null);
+  const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const presetId = settings.selectedPreset || CONFIG.presets?.[0]?.id;
+  const localManifest = readJson(getManifestCacheFile(presetId), null);
   const prefix = category + '/';
   const serverNames = new Set(
     (localManifest?.files || [])
@@ -377,7 +411,9 @@ ipcMain.handle('files:remove', async (_, category, fileName) => {
     return { success: false, error: '잘못된 파일명' };
   }
 
-  const localManifest = readJson(MANIFEST_CACHE_FILE, null);
+  const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const presetId = settings.selectedPreset || CONFIG.presets?.[0]?.id;
+  const localManifest = readJson(getManifestCacheFile(presetId), null);
   const serverNames = new Set(
     (localManifest?.files || [])
       .filter(f => f.path.startsWith(category + '/'))
@@ -431,7 +467,6 @@ function pingMinecraftServer(host, port) {
     socket.on('error',   () => finish({ online: false }));
 
     socket.on('connect', () => {
-      // VarInt helpers
       const vi = (n) => {
         const b = [];
         do { let x = n & 0x7f; n >>>= 7; if (n) x |= 0x80; b.push(x); } while (n);
@@ -442,8 +477,8 @@ function pingMinecraftServer(host, port) {
       const portBuf = Buffer.allocUnsafe(2); portBuf.writeUInt16BE(port);
 
       socket.write(Buffer.concat([
-        pkt(0x00, vi(0), str(host), portBuf, vi(1)), // handshake
-        pkt(0x00)                                      // status request
+        pkt(0x00, vi(0), str(host), portBuf, vi(1)),
+        pkt(0x00)
       ]));
     });
 
@@ -453,8 +488,8 @@ function pingMinecraftServer(host, port) {
         let o = 0;
         const rv = () => { let v = 0, s = 0, b; do { b = buf[o++]; v |= (b & 0x7f) << s; s += 7; } while (b & 0x80); return v; };
         const pktLen = rv();
-        if (buf.length < o + pktLen) return; // wait for more
-        rv(); // packet id (0x00)
+        if (buf.length < o + pktLen) return;
+        rv();
         const sLen = rv();
         const json = JSON.parse(buf.slice(o, o + sLen).toString('utf8'));
         finish({
@@ -463,18 +498,19 @@ function pingMinecraftServer(host, port) {
           max_count:     json.players?.max     ?? 0,
           sample:       (json.players?.sample || []).map(p => p.name)
         });
-      } catch { /* incomplete, wait for more data */ }
+      } catch {}
     });
   });
 }
 
 ipcMain.handle('server:status', async () => {
-  const manifest = readJson(MANIFEST_CACHE_FILE, null);
+  const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const presetId = settings.selectedPreset || CONFIG.presets?.[0]?.id;
+  const manifest = readJson(getManifestCacheFile(presetId), null);
   const servers = manifest?.servers;
   if (!servers?.length) return { servers: [] };
 
   const results = await Promise.all(servers.map(async s => {
-    // ip 필드에 ":port" 포함 가능
     const addr = s.ip || '';
     const colonIdx = addr.lastIndexOf(':');
     let host = addr, port = s.port || 25565;
@@ -500,7 +536,11 @@ ipcMain.handle('folder:open-game', async () => {
 // ─── Settings ────────────────────────────────────────────────
 
 ipcMain.handle('settings:get', () => ({ ...DEFAULT_SETTINGS, ...readJson(SETTINGS_FILE, {}) }));
-ipcMain.handle('settings:set', (_, s) => { writeJson(SETTINGS_FILE, s); return { success: true }; });
+ipcMain.handle('settings:set', (_, s) => {
+  const existing = readJson(SETTINGS_FILE, {});
+  writeJson(SETTINGS_FILE, { ...existing, ...s });
+  return { success: true };
+});
 
 // ─── Window ──────────────────────────────────────────────────
 
@@ -514,7 +554,7 @@ function initAutoUpdater() {
     const { autoUpdater } = require('electron-updater');
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.logger = null; // suppress console spam
+    autoUpdater.logger = null;
 
     autoUpdater.on('update-available', info => {
       mainWindow?.webContents.send('updater:available', info.version);
@@ -542,7 +582,6 @@ function initAutoUpdater() {
 app.whenReady().then(() => {
   ensureDirs();
   createWindow();
-  // 배포 버전에서만 자동 업데이트 활성화
   if (app.isPackaged) {
     setTimeout(initAutoUpdater, 2000);
   }

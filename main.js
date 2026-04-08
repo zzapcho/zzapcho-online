@@ -223,10 +223,14 @@ ipcMain.handle('setup:run', async (_, manifest) => {
   const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
   const previousPresetId = settings.selectedPreset;
 
+  // 이전 프리셋 서버 목록 — 프리셋 전환 시 servers.dat 병합에 사용
+  let prevManifestServers = [];
+
   // 프리셋 전환 처리
   if (presetId && previousPresetId && presetId !== previousPresetId) {
     // 1. 현재 사용자 파일을 이전 프리셋 스태시에 저장
     const oldManifest = readJson(getManifestCacheFile(previousPresetId), null);
+    prevManifestServers = oldManifest?.servers || []; // 캐시 삭제 전에 저장
     stashUserFiles(previousPresetId, oldManifest);
 
     // 2. mods/resourcepacks/shaderpacks 전체 초기화
@@ -324,12 +328,16 @@ ipcMain.handle('setup:run', async (_, manifest) => {
     }
 
     // ── 4. 서버 목록 ─────────────────────────────────────────
-    // manifest 서버는 항상 최신으로, 사용자 추가 서버는 유지
+    // manifest 서버 상단 고정 + 사용자 추가 서버 유지
+    // prevManifestServers: 프리셋 전환 시 이전 프리셋 서버 (캐시 삭제 전 저장)
+    //                      동일 프리셋 업데이트 시엔 localManifest.servers 사용
     const serverSource = manifest || localManifest;
-    if (serverSource?.servers !== undefined) {
+    if (serverSource) {
       sendSetupProgress('서버 목록 설정 중...', 92);
-      // 이전 manifest 서버도 넘겨서 교체 시 깔끔하게 제거
-      writeServersDat(GAME_PATH, serverSource.servers || [], localManifest?.servers || []);
+      const prev = prevManifestServers.length > 0
+        ? prevManifestServers
+        : (localManifest?.servers || []);
+      writeServersDat(GAME_PATH, serverSource.servers || [], prev);
     }
 
     sendSetupProgress('준비 완료!', 100);

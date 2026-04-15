@@ -47,8 +47,6 @@ let currentPresetId = null;
 // 현재 게임 버전 / 모드로더 (Modrinth 필터용)
 let currentGameVersion = '1.21.1';
 let currentModLoader = 'vanilla';
-// easy 기능이 활성화된 프리셋 ID 목록
-let _easyPresets = new Set();
 
 // ─── View helpers ─────────────────────────────────────────────
 function showView(name) {
@@ -390,10 +388,6 @@ async function loadPresets() {
   const settings = await window.launcher.getSettings();
   currentPresetId = settings.selectedPreset || presets[0]?.id;
 
-  // easy 프리셋 목록 구성
-  _easyPresets = new Set(presets.filter(p => p.easy).map(p => p.id));
-  updateEasyButtons();
-
   const selectedName = document.getElementById('preset-selected-name');
   const list = document.getElementById('preset-dropdown-list');
   if (!selectedName || !list) return;
@@ -418,19 +412,11 @@ async function loadPresets() {
       list.querySelectorAll('.preset-option').forEach(o =>
         o.classList.toggle('selected', o.textContent === preset.name)
       );
-      updateEasyButtons();
       // setSettings 호출 제거 — setup:run 내부에서 selectedPreset 저장
       await runSetup();
     });
     list.appendChild(opt);
   }
-}
-
-function updateEasyButtons() {
-  const isEasy = _easyPresets.has(currentPresetId);
-  document.querySelectorAll('.btn-browse-easy').forEach(btn => {
-    btn.style.display = isEasy ? '' : 'none';
-  });
 }
 
 // ─── Easy (Modrinth) Browser ──────────────────────────────────

@@ -35,6 +35,12 @@ const DEFAULT_SETTINGS = {
   javaPath: ''
 };
 
+function resolveAssetPath(...segments) {
+  const resourcePath = path.join(process.resourcesPath || '', ...segments);
+  if (app.isPackaged && fs.existsSync(resourcePath)) return resourcePath;
+  return path.join(__dirname, ...segments);
+}
+
 const CONFIG = readJson(CONFIG_PATH, { profile: DEFAULT_PROFILE });
 const PROFILE = { ...DEFAULT_PROFILE, ...(CONFIG.profile || {}) };
 
@@ -357,7 +363,7 @@ function createWindow() {
     minHeight: 620,
     frame: false,
     title: APP_NAME,
-    icon: path.join(__dirname, 'build', 'favicon.ico'),
+    icon: resolveAssetPath('build', 'favicon.ico'),
     backgroundColor: '#151414',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

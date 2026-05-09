@@ -1,6 +1,6 @@
 {
   "name": "zzapcho-online",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "잡초 약탈서버 전용 Minecraft 런처",
   "productName": "잡초 약탈서버 런처",
   "author": "zzapcho",
@@ -35,14 +35,18 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
     "nsis": {
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/favicon.ico",
+      "uninstallerIcon": "build/favicon.ico"
     },
     "publish": {
       "provider": "github",
@@ -52,12 +56,19 @@
     "files": [
       "main.js",
       "preload.js",
+      "build/favicon.ico",
       "launcher.config.json",
       "content/profile.json",
       "content/manifest.json",
       "src/**/*",
       "lib/**/*",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/favicon.ico",
+        "to": "build/favicon.ico"
+      }
     ]
   }
 }

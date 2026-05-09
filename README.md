@@ -91,6 +91,8 @@ npm run build:dir
 
 ## content/client 사용법
 
+GitHub에 `content/client/mods` 또는 `content/client/resourcepacks` 파일을 push하면 GitHub Actions가 `npm run manifest`를 실행하고 `content/manifest.json` 변경분을 자동 커밋합니다. 로컬에서 직접 `npm run manifest`를 실행해도 되지만, 파일만 올려도 최종 manifest는 자동으로 맞춰집니다.
+
 - 모드: `content/client/mods`
 - 리소스팩: `content/client/resourcepacks`
 - 셰이더: 런처의 셰이더 화면에서 파일 추가, 드래그앤드롭, Modrinth 설치

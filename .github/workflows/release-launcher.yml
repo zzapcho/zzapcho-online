@@ -19,6 +19,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run manifest
       - run: npm run content:verify
       - run: npm run build
         env:

@@ -76,6 +76,51 @@ function logLine(type, message) {
   fs.appendFileSync(file, maskSensitive(line), 'utf8');
 }
 
+const gameLogState = {
+  fileLines: [],
+  uiLines: [],
+  timer: null
+};
+
+function flushGameLogBuffer() {
+  if (!gameLogState.fileLines.length && !gameLogState.uiLines.length) return;
+  ensureDirs();
+  const fileLines = gameLogState.fileLines.splice(0).join('');
+  const uiLines = gameLogState.uiLines.splice(0).join('');
+  if (fileLines) {
+    fs.appendFile(path.join(LOG_PATH, 'game.log'), maskSensitive(fileLines), 'utf8', error => {
+      if (error) fs.appendFileSync(path.join(LOG_PATH, 'crash.log'), `[${new Date().toISOString()}] ${error.message}\n`, 'utf8');
+    });
+  }
+  if (uiLines) mainWindow?.webContents.send('game:log', maskSensitive(uiLines));
+}
+
+function queueGameLog(message) {
+  const text = String(message || '').replace(/\r?\n$/, '');
+  gameLogState.fileLines.push(`[${new Date().toISOString()}] ${text}\n`);
+  gameLogState.uiLines.push(`${text}\n`);
+  if (!gameLogState.timer) {
+    gameLogState.timer = setTimeout(() => {
+      gameLogState.timer = null;
+      flushGameLogBuffer();
+    }, 150);
+  }
+}
+
+function createThrottledWindowSender(channel, intervalMs = 150) {
+  let latest = null;
+  let timer = null;
+  return data => {
+    latest = data;
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (latest) mainWindow?.webContents.send(channel, latest);
+      latest = null;
+    }, intervalMs);
+  };
+}
+
 function maskSensitive(value) {
   return String(value)
     .replace(/(access[_-]?token|refresh[_-]?token|bearer|authorization|session[_-]?id)(["'\s:=]+)[^"'\s,}]+/gi, '$1$2[masked]')
@@ -525,16 +570,18 @@ ipcMain.handle('game:launch', async () => {
     if (loader === 'forge') customVersion = modloader.getInstalledForgeId(GAME_PATH, gameVersion);
 
     const launcher = new Client();
-    launcher.on('progress', event => mainWindow?.webContents.send('game:progress', event));
-    launcher.on('download-status', event => mainWindow?.webContents.send('game:download-status', event));
+    const sendGameProgress = createThrottledWindowSender('game:progress');
+    const sendDownloadStatus = createThrottledWindowSender('game:download-status');
+    launcher.on('progress', sendGameProgress);
+    launcher.on('download-status', sendDownloadStatus);
     launcher.on('close', code => {
-      logLine('game', `process closed: ${code}`);
+      queueGameLog(`process closed: ${code}`);
+      flushGameLogBuffer();
       mainWindow?.webContents.send('game:closed', code);
     });
     launcher.on('data', event => {
       const text = typeof event === 'string' ? event : event?.data || JSON.stringify(event);
-      logLine('game', text);
-      mainWindow?.webContents.send('game:log', maskSensitive(text));
+      queueGameLog(text);
     });
 
     const opts = {

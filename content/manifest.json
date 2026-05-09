@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "profileId": "zzapcho-online-main",
   "displayName": "잡초 약탈서버",
-  "manifestVersion": "2026.05.10-002",
+  "manifestVersion": "2026.05.10-003",
   "server": {
     "host": "online.zzapcho.kr",
     "port": 25565
@@ -14,7 +14,7 @@
   },
   "launcher": {
     "minimumVersion": "1.0.0",
-    "latestVersion": "1.0.2"
+    "latestVersion": "1.0.3"
   },
   "sync": {
     "deleteUnknownFiles": false,
@@ -37,6 +37,13 @@
       "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/chat_heads-1.2.2-fabric-26.1.jar",
       "sha256": "c8827bcfec341feaef3ab31998093fe56b1b07648e17e2afa5e085eab3275a72",
       "size": 90861,
+      "required": true
+    },
+    {
+      "path": "mods/cloth-config-26.1.154.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/cloth-config-26.1.154.jar",
+      "sha256": "fb7a5d869ce10eaac2c2fe9ab84b4fc011a1fbfa575a93be9845a386a7f0c7d3",
+      "size": 1135373,
       "required": true
     },
     {

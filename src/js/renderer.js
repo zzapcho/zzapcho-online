@@ -368,7 +368,10 @@ window.launcher.onGameClosed(code => {
 
 window.launcher.onGameLog(line => {
   if (pages.logs.classList.contains('active') && els.logType.value === 'game') {
-    els.logBody.textContent += `${line}\n`;
+    els.logBody.textContent += line.endsWith('\n') ? line : `${line}\n`;
+    if (els.logBody.textContent.length > 120000) {
+      els.logBody.textContent = els.logBody.textContent.slice(-120000);
+    }
     els.logBody.scrollTop = els.logBody.scrollHeight;
   }
 });

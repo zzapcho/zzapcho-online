@@ -149,7 +149,7 @@ body {
 
 .nav-btn {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-secondary);
   padding: 8px 10px;
   border-radius: 6px;
@@ -160,11 +160,31 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
 }
 
 .nav-btn svg { flex-shrink: 0; }
 .nav-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .nav-btn.active { background: rgba(216, 182, 106, 0.14); color: var(--accent-hover); font-weight: 700; }
+.nav-btn.update-attention {
+  border-color: rgba(216, 182, 106, 0.65);
+  background: rgba(216, 182, 106, 0.12);
+  color: var(--accent-hover);
+  box-shadow: 0 0 0 1px rgba(216, 182, 106, 0.12), 0 0 18px rgba(216, 182, 106, 0.14);
+}
+.nav-btn.update-attention::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-hover);
+  margin-left: auto;
+  box-shadow: 0 0 10px rgba(240, 207, 122, 0.7);
+}
+.nav-btn.update-ready::after {
+  background: var(--green);
+  box-shadow: 0 0 10px rgba(143, 191, 139, 0.7);
+}
 
 .nav-sep {
   height: 1px;

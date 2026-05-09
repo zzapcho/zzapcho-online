@@ -41,6 +41,7 @@ const els = {
   updateStatus: document.getElementById('update-status'),
   updateProgressFill: document.getElementById('update-progress-fill'),
   restartUpdateBtn: document.getElementById('btn-restart-update'),
+  navUpdates: document.getElementById('nav-updates'),
   logType: document.getElementById('log-type'),
   logQuery: document.getElementById('log-query'),
   logBody: document.getElementById('log-body'),
@@ -109,6 +110,23 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function compareVersions(a, b) {
+  const left = String(a || '0').split('.').map(part => Number.parseInt(part, 10) || 0);
+  const right = String(b || '0').split('.').map(part => Number.parseInt(part, 10) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] || 0) - (right[index] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function setUpdateAttention(active, ready = false) {
+  if (!els.navUpdates) return;
+  els.navUpdates.classList.toggle('update-attention', Boolean(active));
+  els.navUpdates.classList.toggle('update-ready', Boolean(active && ready));
+}
+
 function updateModloaderBadge(minecraft) {
   const loader = minecraft?.loader || 'vanilla';
   const version = minecraft?.loaderVersion || '';
@@ -149,10 +167,16 @@ async function checkManifestUpdate() {
   els.currentLauncherVersion.textContent = result.currentLauncherVersion;
   els.latestLauncherVersion.textContent = result.latestLauncherVersion;
   launcherUpdateRequired = result.launcherUpdateRequired;
+  const hasNewLauncherVersion = compareVersions(result.currentLauncherVersion, result.latestLauncherVersion) < 0;
+  setUpdateAttention(launcherUpdateRequired || hasNewLauncherVersion);
   if (launcherUpdateRequired) {
     els.updateStatus.textContent = '런처 업데이트가 필요합니다';
     setPlayState('런처 업데이트 필요', true);
+  } else if (hasNewLauncherVersion) {
+    els.updateStatus.textContent = '새 런처 버전이 있습니다';
+    setPlayState(loggedIn ? '입장하기' : '로그인 필요', !loggedIn);
   } else {
+    setUpdateAttention(false);
     els.updateStatus.textContent = result.source === 'remote' ? '최신 manifest 확인 완료' : `로컬 manifest 사용 중 (${result.source})`;
     setPlayState(loggedIn ? '입장하기' : '로그인 필요', !loggedIn);
   }
@@ -351,19 +375,25 @@ window.launcher.onGameLog(line => {
 
 window.launcher.onUpdaterStatus(data => {
   els.updateStatus.textContent = data.status || '업데이트 상태 변경';
+  if (data.status === '최신 버전입니다') {
+    setUpdateAttention(false);
+  }
 });
 
 window.launcher.onUpdaterAvailable(version => {
+  setUpdateAttention(true);
   els.latestLauncherVersion.textContent = version;
   els.updateStatus.textContent = '새 버전 다운로드 중';
 });
 
 window.launcher.onUpdaterProgress(({ percent, speed }) => {
+  setUpdateAttention(true);
   els.updateProgressFill.style.width = `${percent}%`;
   els.updateStatus.textContent = `새 버전 다운로드 중 ${percent}% (${speed} KB/s)`;
 });
 
 window.launcher.onUpdaterDownloaded(version => {
+  setUpdateAttention(true, true);
   els.latestLauncherVersion.textContent = version;
   els.updateProgressFill.style.width = '100%';
   els.updateStatus.textContent = '업데이트 준비 완료';

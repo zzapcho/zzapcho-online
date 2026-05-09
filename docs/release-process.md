@@ -36,9 +36,19 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
+Actions 탭의 `Release Launcher`를 수동 실행할 수도 있습니다. 태그 입력을 비우면 `package.json`의 `version`을 읽어 `vX.Y.Z` 형식으로 릴리즈 태그를 정합니다.
+
+릴리즈에는 Windows 설치 파일과 자동 업데이트 메타데이터가 올라갑니다.
+
+- `ZzapchoOnline-Setup-X.Y.Z.exe`
+- `latest.yml`
+- `*.blockmap`
+
 ## 자동 업데이트 확인
 
 릴리즈 업로드 후 설치된 앱에서 업데이트 화면을 확인합니다. `electron-updater`는 `zzapcho/zzapcho-online` Releases를 조회합니다.
+
+런처가 새 버전 또는 필수 업데이트를 감지하면 사이드바의 `업데이트` 항목에 골드 테두리를 표시합니다. 다운로드가 끝나면 업데이트 화면의 재시작 버튼으로 설치를 마무리합니다.
 
 ## 코드서명
 

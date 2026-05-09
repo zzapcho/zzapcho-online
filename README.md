@@ -1,251 +1,222 @@
-# zzapcho Launcher 관리자 가이드
+# 잡초 약탈서버 런처 / zzapcho-online
 
-> 이 런처를 처음 보는 분도 이해할 수 있도록 작성했습니다.
+`zzapcho-online`은 기존 `zzapcho-launcher`를 기반으로 만든 잡초 약탈서버 전용 Minecraft 런처입니다. 이 저장소 하나에서 Electron 런처 코드와 공식 클라이언트 파일을 함께 관리합니다.
 
----
+기본 서버는 `online.zzapcho.kr:25565`이며, 사용자는 런처에서 서버 주소, 모드, 리소스팩을 변경할 수 없습니다. 관리자는 GitHub 저장소의 `content/profile.json`과 `content/client/` 파일을 수정하고 manifest를 갱신해 공식 모드/리소스팩 구성을 배포합니다. 셰이더는 사용자가 런처에서 자유롭게 추가할 수 있고, `config`는 GitHub manifest 관리 대상이 아닙니다.
 
-## 📦 전체 구조 이해하기
+## 주요 기능
 
-이 런처는 **GitHub 저장소 2개**로 운영됩니다.
+- Microsoft 계정 로그인 후 Minecraft 실행
+- `content/manifest.json` 기반 공식 파일 다운로드
+- SHA-256 검증 및 불일치 파일 재다운로드
+- manifest에 없는 공식 보호 폴더 파일 quarantine
+- 셰이더 파일 직접 추가/드래그앤드롭/Modrinth 설치
+- `online.zzapcho.kr:25565` 서버 상태 표시
+- GitHub Releases 기반 `electron-updater` 자동 업데이트
+- 런처/게임/업데이트/크래시 로그와 지원 ZIP 생성
 
-| 저장소 | 하는 일 |
-|--------|---------|
-| `zzapcho/zzapcho-launcher` | 런처 프로그램 자체 (지금 이 곳) |
-| `zzapcho/mcserver1` | 모드, 리소스팩, 셰이더 파일 관리 |
+## 제거된 기능과 이유
 
-- 플레이어가 런처를 켜면 → `mcserver1`에서 최신 파일 자동 다운로드
-- 런처 코드를 수정하면 → 플레이어 런처가 자동으로 업데이트
+- 서버 프리셋 선택, 임의 서버 주소 입력 제거
+- 사용자 모드/리소스팩 추가 제거
+- 사용자 파일 stash/restore 제거
+- Modrinth 검색, 버전 조회, 다운로드 제거
 
----
+약탈서버 전용 런처에서는 클라이언트 구성을 사용자가 바꾸는 구조가 아니라 개발자가 저장소에서 통제하는 구조가 필요하기 때문입니다.
 
-## 🧩 모드 / 리소스팩 / 셰이더 추가하는 법
+## 기술 스택
 
-### 1단계 — `mcserver1` 저장소 열기
+- Electron
+- Node.js
+- minecraft-launcher-core
+- msmc
+- electron-updater
+- GitHub Actions
 
-👉 https://github.com/zzapcho/mcserver1 접속
+## 프로젝트 구조
 
----
-
-### 2단계 — 파일을 올바른 폴더에 업로드
-
-아래 폴더에 맞는 파일을 넣으면 됩니다.
-
-```
-mcserver1/
-├── mods/           ← 모드 파일 (.jar)
-├── resourcepacks/  ← 리소스팩 파일 (.zip)
-└── shaderpacks/    ← 셰이더 파일 (.zip)
-```
-
-**방법:**
-1. 위 폴더 중 하나 클릭 (예: `mods`)
-2. 오른쪽 위 **Add file** → **Upload files** 클릭
-3. 파일 끌어다 놓기
-4. 아래 **Commit changes** 클릭
-
----
-
-### 3단계 — 기다리기 (약 1~2분)
-
-파일을 올리면 GitHub가 자동으로 `manifest.json`을 업데이트합니다.
-→ 플레이어가 **플레이 버튼**을 누를 때 자동으로 새 파일이 받아집니다. ✅
-
----
-
-### ❌ 모드 삭제하는 법
-
-1. `mods/` 폴더에서 삭제할 파일 클릭
-2. 오른쪽 위 🗑️ **Delete file** 클릭
-3. **Commit changes** 클릭
-
-→ 플레이어 런처가 다음 실행 시 자동으로 해당 파일 삭제 ✅
-
----
-
-### 📝 서버 주소 변경하는 법
-
-1. `mcserver1` 저장소에서 `manifest.json` 파일 클릭
-2. 오른쪽 위 ✏️ (연필 아이콘) 클릭
-3. 아래 부분 수정:
-
-```json
-"servers": [
-  {
-    "name": "서버 이름",
-    "ip": "서버.주소.com",
-    "port": 25565
-  }
-]
+```text
+content/
+  profile.json
+  manifest.json
+  client/
+    mods/
+    resourcepacks/
+scripts/
+  generate-manifest.js
+  verify-content.js
+  print-content-summary.js
+docs/
+.github/workflows/
+main.js
+preload.js
+src/
+launcher.config.json
 ```
 
-4. **Commit changes** 클릭
-
----
-
-### 🎮 마인크래프트 버전 변경하는 법
-
-1. `manifest.json`에서 아래 부분 수정:
-
-```json
-"gameVersion": "1.21.1",
-"modLoader": {
-  "type": "fabric",
-  "version": "latest"
-}
-```
-
-- `type`은 `"fabric"`, `"forge"`, `"vanilla"` 중 하나
-- `version`은 `"latest"` 또는 `"0.16.9"` 처럼 직접 지정
-
-2. **Commit changes** 클릭
-
----
-
-## 🚀 런처 자체를 업데이트하는 법
-
-런처 디자인이나 기능을 바꾸고 싶을 때 사용합니다.
-
-방법은 두 가지입니다. 편한 걸로 쓰면 됩니다.
-
----
-
-## 💻 방법 1 — 명령어로 하기 (PC에서)
-
-### 1단계 — 코드 수정
-
-`C:\Users\kdy20\Desktop\Claude\mrs-launcher` 폴더에서 원하는 파일을 수정합니다.
-
----
-
-### 2단계 — 버전 숫자 올리기
-
-`package.json` 파일을 메모장이나 VSCode로 열어서 맨 위쪽에 있는 버전 숫자를 올립니다.
-
-```json
-"version": "1.0.1"   ← 이 숫자를 1.0.2, 1.0.3 이런식으로 올리면 됨
-```
-
-> ⚠️ 버전 숫자를 안 올리면 플레이어 런처가 업데이트가 생긴 줄 모릅니다!
-
----
-
-### 3단계 — 터미널 열기
-
-`mrs-launcher` 폴더 안에서 터미널을 엽니다.
-
-> **방법:** `mrs-launcher` 폴더를 탐색기에서 열고 → 주소창 클릭 → `cmd` 입력 → 엔터
-
----
-
-### 4단계 — 명령어 4줄 입력
-
-아래 명령어를 **위에서부터 순서대로** 하나씩 입력하고 엔터를 누릅니다.
-
-버전이 `1.0.2`라면:
-
-```
-git add .
-git commit -m "v1.0.2"
-git tag v1.0.2
-git push && git push --tags
-```
-
-> `v1.0.2` 부분은 package.json에 적은 버전 숫자와 똑같이 써야 합니다!
-
-각 명령어가 하는 일:
-- `git add .` → 수정한 파일 전부 선택
-- `git commit -m "..."` → 변경사항 저장
-- `git tag v1.0.2` → "이게 버전 1.0.2야" 라고 표시
-- `git push && git push --tags` → GitHub에 올리기
-
----
-
-## 🌐 방법 2 — GitHub 사이트에서 하기
-
-> PC가 없거나 터미널이 귀찮을 때 사용합니다.
-
-### 1단계 — package.json에서 버전 숫자 올리기
-
-1. 👉 https://github.com/zzapcho/zzapcho-launcher/blob/main/package.json 접속
-2. 오른쪽 위 ✏️ (연필 아이콘) 클릭
-3. 아래 부분에서 버전 숫자 수정:
-   ```json
-   "version": "1.0.3"   ← 숫자 올리기
-   ```
-4. 오른쪽 위 초록색 **Commit changes** 버튼 클릭
-5. 팝업 뜨면 그냥 **Commit changes** 클릭
-
----
-
-### 2단계 — 새 릴리즈 만들기
-
-1. 👉 https://github.com/zzapcho/zzapcho-launcher/releases 접속
-2. 오른쪽 위 **Draft a new release** 클릭
-3. **Choose a tag** 클릭 → `v1.0.3` 입력 (버전 앞에 v 붙이기) → **Create new tag: v1.0.3 on publish** 클릭
-4. **Release title** 에 `v1.0.3` 입력
-5. 아래 **Publish release** 버튼 클릭 ← 꼭 이걸 눌러야 함! (Save draft 누르면 안 됨)
-
----
-
-### 3단계 — 기다리기 (5~10분)
-
-👉 https://github.com/zzapcho/zzapcho-launcher/actions
-
-- 🟡 노란 원 = 지금 빌드 중
-- ✅ 초록 체크 = 완료! exe 파일이 Releases에 올라갔음
-- ❌ 빨간 X = 실패 (클릭 → **Re-run all jobs** 눌러서 다시 시도)
-
----
-
-## 📥 설치 파일 받기 (첫 배포 때만)
-
-> 처음 한 번만 플레이어가 직접 설치해야 합니다.
-> 그 다음부터는 런처가 켜질 때 혼자 알아서 업데이트됩니다.
-
-👉 https://github.com/zzapcho/zzapcho-launcher/releases
-
-여기서 `zzapcho Launcher Setup X.X.X.exe` 파일을 받아서 플레이어에게 공유하면 됩니다.
-
----
-
-## 🔁 플레이어 자동 업데이트
-
-플레이어가 런처를 켜면:
-
-1. 새 버전이 있으면 자동으로 다운로드 시작
-2. 화면에 다운로드 진행률 표시
-3. 완료되면 자동으로 재시작 → 새 버전으로 업데이트 완료 ✅
-
----
-
-## 🔄 업데이트 타이밍 정리
-
-| 무엇 | 언제 체크 | 어디서 가져옴 |
-|------|----------|--------------|
-| 모드 / 리소스팩 / 셰이더 | 플레이 버튼 누를 때마다 | `mcserver1` GitHub |
-| 런처 프로그램 자체 | 런처 켤 때 (2초 후 자동) | `zzapcho-launcher` GitHub Releases |
-
----
-
-## 📋 자주 쓰는 명령어 모음
+## 실행 방법
 
 ```bash
-# 런처 개발 중 실행 (테스트)
+npm ci
+npm run manifest
+npm run content:verify
 npm start
+```
 
-# 최종 배포용 .exe 빌드 (로컬, 개발자 모드 필요)
+## 빌드 방법
+
+```bash
+npm run content:verify
 npm run build
 ```
 
----
+개발용 디렉터리 빌드는 다음 명령을 사용합니다.
 
-## ❓ 문제가 생겼을 때
+```bash
+npm run build:dir
+```
 
-| 증상 | 해결 방법 |
-|------|----------|
-| GitHub Actions 빌드 실패 | Actions 탭에서 빨간 X 클릭 → 오류 확인 → **Re-run all jobs** |
-| Actions에서 "Permission denied" | Settings → Actions → Workflow permissions → Read and write permissions |
-| 플레이어가 업데이트 안 됨 | package.json version이 올라갔는지 확인 |
-| 모드가 적용 안 됨 | mcserver1의 manifest.json이 업데이트됐는지 확인 |
-| 서버가 멀티플레이에 없음 | manifest.json의 servers 항목 IP 확인 |
-| 로컬 빌드 실패 (심볼릭 링크 오류) | Windows 설정 → 개발자용 → 개발자 모드 켜기 |
+## content/profile.json
+
+`content/profile.json`은 관리자가 수정하는 단일 설정 파일입니다.
+
+- 서버 이름, 주소, 포트
+- Minecraft 버전
+- loader 종류와 버전
+- 런처 최소/최신 버전
+- 보호 폴더와 quarantine 정책
+- manifest 버전
+
+런처 UI에서는 이 값을 수정할 수 없습니다.
+
+## content/client 사용법
+
+- 모드: `content/client/mods`
+- 리소스팩: `content/client/resourcepacks`
+- 셰이더: 런처의 셰이더 화면에서 파일 추가, 드래그앤드롭, Modrinth 설치
+- config: GitHub manifest 관리 대상 아님
+
+유저가 런처에서 추가하는 방식이 아닙니다. 관리자가 이 저장소에 파일을 넣고 manifest를 갱신하면, 런처가 실행 시 GitHub의 manifest를 보고 등록된 파일만 다운로드/검증해서 사용합니다.
+
+모드 추가 예시:
+
+```bash
+# jar 파일을 content/client/mods에 추가
+npm run manifest
+npm run content:verify
+npm run content:summary
+git add content
+git commit -m "Update official client content"
+git push
+```
+
+리소스팩도 같은 방식입니다.
+
+```bash
+# 리소스팩
+copy my-pack.zip content/client/resourcepacks/
+
+npm run manifest
+npm run content:verify
+git add content
+git commit -m "Update official resource packs"
+git push
+```
+
+파일 크기가 큰 모드/리소스팩은 GitHub Releases 또는 Git LFS 사용을 고려해야 합니다. 현재 기본 구현은 `raw.githubusercontent.com` 기반 URL을 사용합니다.
+
+## 파일 검증과 quarantine
+
+런처 데이터 위치는 `%AppData%/zzapchoOnline`입니다.
+
+- 게임 폴더: `%AppData%/zzapchoOnline/minecraft`
+- 로그: `%AppData%/zzapchoOnline/logs`
+- 크래시: `%AppData%/zzapchoOnline/crashes`
+- 격리: `%AppData%/zzapchoOnline/quarantine`
+
+런처는 전체 PC를 검사하지 않습니다. `zzapchoOnline/minecraft` 안의 `mods`, `resourcepacks` 보호 폴더만 공식 manifest 기준으로 검사합니다. `shaderpacks`는 사용자 자유 영역이고, `config`는 manifest 관리 대상이 아닙니다.
+
+## GitHub Actions
+
+- `verify-content.yml`: manifest 생성, content 검증, summary 출력
+- `build.yml`: content 검증 후 Windows 빌드
+- `release-launcher.yml`: 태그 또는 수동 실행으로 빌드 산출물을 GitHub Release에 업로드
+
+manifest 자동 커밋은 기본 동작이 아닙니다. 관리자가 로컬에서 `npm run manifest`를 실행하고 변경분을 commit합니다.
+
+## 자동 업데이트
+
+`electron-updater`는 다음 GitHub Release 저장소를 사용합니다.
+
+```json
+{
+  "provider": "github",
+  "owner": "zzapcho",
+  "repo": "zzapcho-online"
+}
+```
+
+`manifest.launcher.minimumVersion`이 현재 앱 버전보다 높으면 입장 버튼이 비활성화되고 업데이트 필요 상태가 표시됩니다.
+
+## 배포 방법
+
+```bash
+npm version patch
+npm run manifest
+npm run content:verify
+git add .
+git commit -m "Release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main --tags
+```
+
+GitHub Actions가 Release를 만들고 설치 파일을 업로드합니다.
+
+## 코드서명과 SmartScreen
+
+Windows 배포 품질을 위해 코드서명 인증서 적용을 권장합니다. 코드서명이 없으면 Windows SmartScreen 경고가 표시될 수 있습니다.
+
+## 로그와 크래시
+
+런처는 `launcher.log`, `game.log`, `update.log`, `crash.log`를 저장합니다. 지원 ZIP에는 최신 로그, 민감정보가 마스킹된 설정 요약, manifest 요약, 앱/OS/Minecraft 정보가 포함됩니다.
+
+## 서버 입장 통제의 한계
+
+이 런처는 Minecraft/Mojang/Microsoft 공식 런처가 아닙니다. 정품 Minecraft 계정이 필요합니다.
+
+런처만으로 완전한 안티치트나 DRM을 보장할 수 없습니다. 사용자는 런처 밖에서 게임 파일을 수정하거나 다른 클라이언트로 접속을 시도할 수 있습니다. 강한 통제를 위해서는 서버 측 Paper 플러그인, 접속 토큰, 클라이언트 검증 핸드셰이크 같은 서버 연동이 추후 필요합니다.
+
+런처로만 서버에 들어오게 하려면 모드 방식보다 서버 측 검증이 필요합니다. 권장 구조는 `docs/launcher-only-access.md`에 정리했습니다.
+
+## 새 GitHub 저장소 생성
+
+이 환경에는 `gh` CLI가 설치되어 있지 않아 자동 생성하지 못했습니다. 수동 생성 시:
+
+```bash
+git remote remove origin
+git remote add origin https://github.com/zzapcho/zzapcho-online.git
+git branch -M main
+git push -u origin main
+```
+
+처음부터 복제해 작업한다면:
+
+```bash
+git clone https://github.com/zzapcho/zzapcho-launcher.git zzapcho-online
+cd zzapcho-online
+git remote remove origin
+git remote add origin https://github.com/zzapcho/zzapcho-online.git
+git branch -M main
+git push -u origin main
+```
+
+## 향후 계획
+
+- 서버 측 Paper 플러그인과 런처 핸드셰이크 연동
+- Release asset 기반 대용량 content 배포
+- 코드서명 자동화
+- 서버 API 기반 접속자 목록 개선
+
+## 법적 고지
+
+Minecraft, Mojang, Microsoft 관련 상표와 자산은 각 권리자에게 있습니다. 이 프로젝트는 비공식 커스텀 런처이며 Mojang 또는 Microsoft와 제휴되어 있지 않습니다.

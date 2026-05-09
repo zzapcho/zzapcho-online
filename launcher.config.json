@@ -1,6 +1,12 @@
 {
-  "presets": [
-    { "id": "mcserver1", "name": "기본", "manifestUrl": "https://raw.githubusercontent.com/zzapcho/mcserver1/main/manifest.json", "easy": false },
-    { "id": "mcserver2", "name": "테스트", "manifestUrl": "https://raw.githubusercontent.com/zzapcho/mcserver2/main/manifest.json", "easy": true }
-  ]
+  "profile": {
+    "id": "zzapcho-online-main",
+    "name": "잡초 약탈서버",
+    "server": {
+      "host": "online.zzapcho.kr",
+      "port": 25565
+    },
+    "manifestUrl": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/manifest.json",
+    "profileUrl": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/profile.json"
+  }
 }

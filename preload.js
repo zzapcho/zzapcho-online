@@ -1,55 +1,48 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('launcher', {
-  // Auth
-  login:     () => ipcRenderer.invoke('auth:login'),
+  login: () => ipcRenderer.invoke('auth:login'),
   checkAuth: () => ipcRenderer.invoke('auth:check'),
-  logout:    () => ipcRenderer.invoke('auth:logout'),
+  logout: () => ipcRenderer.invoke('auth:logout'),
 
-  // Presets
-  listPresets: () => ipcRenderer.invoke('presets:list'),
+  getProfile: () => ipcRenderer.invoke('profile:get'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  runSetup: () => ipcRenderer.invoke('setup:run'),
+  onSetupProgress: cb => ipcRenderer.on('setup:progress', (_, data) => cb(data)),
 
-  // Setup
-  runSetup:        (manifest) => ipcRenderer.invoke('setup:run', manifest),
-  onSetupProgress: (cb) => ipcRenderer.on('setup:progress', (_, d) => cb(d)),
+  launch: () => ipcRenderer.invoke('game:launch'),
+  onProgress: cb => ipcRenderer.on('game:progress', (_, data) => cb(data)),
+  onDownloadStatus: cb => ipcRenderer.on('game:download-status', (_, data) => cb(data)),
+  onGameClosed: cb => ipcRenderer.on('game:closed', (_, code) => cb(code)),
+  onGameLog: cb => ipcRenderer.on('game:log', (_, data) => cb(data)),
 
-  // Update check (presetId 전달)
-  checkUpdate: (presetId) => ipcRenderer.invoke('update:check', presetId),
+  getServerStatus: () => ipcRenderer.invoke('server:status'),
+  listFiles: () => ipcRenderer.invoke('files:list'),
 
-  // Game
-  launch:           () => ipcRenderer.invoke('game:launch'),
-  onProgress:       (cb) => ipcRenderer.on('game:progress',       (_, d) => cb(d)),
-  onDownloadStatus: (cb) => ipcRenderer.on('game:download-status', (_, d) => cb(d)),
-  onGameClosed:     (cb) => ipcRenderer.on('game:closed',          (_, c) => cb(c)),
-  onGameLog:        (cb) => ipcRenderer.on('game:log',             (_, e) => cb(e)),
+  addFiles: (category, paths) => ipcRenderer.invoke('files:add', category, paths),
+  openFileDialog: category => ipcRenderer.invoke('files:open-dialog', category),
+  removeFile: (category, fileName) => ipcRenderer.invoke('files:remove', category, fileName),
+  modrinthSearch: payload => ipcRenderer.invoke('modrinth:search', payload),
+  modrinthVersions: payload => ipcRenderer.invoke('modrinth:versions', payload),
+  modrinthDownload: payload => ipcRenderer.invoke('modrinth:download', payload),
 
-  // File management
-  listFiles:      (category)             => ipcRenderer.invoke('files:list', category),
-  addFiles:       (category, paths)      => ipcRenderer.invoke('files:add', category, paths),
-  removeFile:     (category, fileName)   => ipcRenderer.invoke('files:remove', category, fileName),
-  openFileDialog: (category)             => ipcRenderer.invoke('files:open-dialog', category),
-  openGameFolder: ()                     => ipcRenderer.invoke('folder:open-game'),
-  getServerStatus: ()                    => ipcRenderer.invoke('server:status'),
+  openGameFolder: () => ipcRenderer.invoke('folder:open-game'),
+  openLogsFolder: () => ipcRenderer.invoke('folder:open-logs'),
+  openCrashesFolder: () => ipcRenderer.invoke('folder:open-crashes'),
+  readLog: (type, query) => ipcRenderer.invoke('logs:read', type, query),
+  createSupportZip: () => ipcRenderer.invoke('support:create-zip'),
 
-  // Modrinth Browser
-  modrinthSearch:   (p) => ipcRenderer.invoke('modrinth:search', p),
-  modrinthVersions: (p) => ipcRenderer.invoke('modrinth:versions', p),
-  modrinthDownload: (p) => ipcRenderer.invoke('modrinth:download', p),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: settings => ipcRenderer.invoke('settings:set', settings),
+  getVersion: () => ipcRenderer.invoke('app:version'),
 
-  // Settings
-  getSettings: ()  => ipcRenderer.invoke('settings:get'),
-  setSettings: (s) => ipcRenderer.invoke('settings:set', s),
-  getVersion:  ()  => ipcRenderer.invoke('app:version'),
+  onUpdaterStatus: cb => ipcRenderer.on('updater:status', (_, data) => cb(data)),
+  onUpdaterAvailable: cb => ipcRenderer.on('updater:available', (_, version) => cb(version)),
+  onUpdaterProgress: cb => ipcRenderer.on('updater:progress', (_, progress) => cb(progress)),
+  onUpdaterDownloaded: cb => ipcRenderer.on('updater:downloaded', (_, version) => cb(version)),
+  restartForUpdate: () => ipcRenderer.invoke('updater:restart'),
 
-  // Auto-updater events
-  onUpdaterAvailable: (cb) => ipcRenderer.on('updater:available', (_, v) => cb(v)),
-  onUpdaterProgress:  (cb) => ipcRenderer.on('updater:progress',  (_, p) => cb(p)),
-  onUpdaterDownloaded:(cb) => ipcRenderer.on('updater:downloaded', (_, v) => cb(v)),
-
-  // Window
   minimize: () => ipcRenderer.send('window:minimize'),
-  close:    () => ipcRenderer.send('window:close'),
-
-  // File path (drag & drop)
-  getPathForFile: (file) => webUtils.getPathForFile(file)
+  close: () => ipcRenderer.send('window:close'),
+  getPathForFile: file => webUtils.getPathForFile(file)
 });

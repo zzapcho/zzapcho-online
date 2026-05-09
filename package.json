@@ -1,12 +1,17 @@
 {
-  "name": "zzapcho-launcher",
-  "version": "1.1.6",
-  "description": "zzapcho Custom Minecraft Launcher",
+  "name": "zzapcho-online",
+  "version": "1.0.0",
+  "description": "잡초 약탈서버 전용 Minecraft 런처",
+  "productName": "잡초 약탈서버 런처",
+  "author": "zzapcho",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "build:dir": "electron-builder --win --dir",
+    "manifest": "node scripts/generate-manifest.js",
+    "content:verify": "node scripts/verify-content.js",
+    "content:summary": "node scripts/print-content-summary.js"
   },
   "dependencies": {
     "electron-updater": "^6.8.3",
@@ -18,13 +23,15 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.zzapcho.launcher",
-    "productName": "zzapcho Launcher",
+    "appId": "com.zzapcho.online",
+    "productName": "잡초 약탈서버 런처",
     "directories": {
       "output": "dist"
     },
+    "artifactName": "ZzapchoOnline-Setup-${version}.${ext}",
     "win": {
       "icon": "build/favicon.ico",
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
@@ -40,12 +47,14 @@
     "publish": {
       "provider": "github",
       "owner": "zzapcho",
-      "repo": "zzapcho-launcher"
+      "repo": "zzapcho-online"
     },
     "files": [
       "main.js",
       "preload.js",
       "launcher.config.json",
+      "content/profile.json",
+      "content/manifest.json",
       "src/**/*",
       "lib/**/*",
       "node_modules/**/*"

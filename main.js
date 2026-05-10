@@ -4,7 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
 const { spawn } = require('child_process');
-const { Client } = require('minecraft-launcher-core');
+const { Worker } = require('worker_threads');
 
 let mainWindow;
 let mcToken = null;
@@ -174,6 +174,31 @@ function normalizeLog(event) {
 
 function forceKillGameProcess(processRef) {
   if (!processRef) return Promise.resolve(false);
+  if (typeof processRef.postMessage === 'function' && typeof processRef.terminate === 'function') {
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const timer = setTimeout(() => {
+        processRef.terminate().then(() => finish(true)).catch(() => finish(false));
+      }, 5000);
+      processRef.once?.('message', message => {
+        if (message?.type === 'closed') {
+          clearTimeout(timer);
+          finish(true);
+        }
+      });
+      try {
+        processRef.postMessage({ type: 'terminate' });
+      } catch {
+        clearTimeout(timer);
+        processRef.terminate().then(() => finish(true)).catch(() => finish(false));
+      }
+    });
+  }
   if (process.platform !== 'win32') {
     try {
       processRef.kill('SIGKILL');
@@ -217,10 +242,11 @@ function sendRunnerMessage(processRef, message) {
   throw new Error('game runner process does not support IPC');
 }
 
-function launchMinecraftDirect(opts, sendGameProgress, sendDownloadStatus) {
+function launchMinecraftInWorker(opts, sendGameProgress, sendDownloadStatus) {
   return new Promise(resolve => {
     let settled = false;
-    const launcher = new Client();
+    const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
+    const runner = new Worker(`require(${JSON.stringify(runnerPath)});`, { eval: true });
 
     const finishLaunch = result => {
       if (settled) return;
@@ -229,29 +255,49 @@ function launchMinecraftDirect(opts, sendGameProgress, sendDownloadStatus) {
       resolve(result);
     };
 
-    launcher.on('progress', sendGameProgress);
-    launcher.on('download-status', sendDownloadStatus);
-    launcher.on('data', event => queueGameLog(normalizeLog(event)));
-    launcher.on('debug', event => queueGameLog(`[debug] ${normalizeLog(event)}`));
-    launcher.on('close', code => {
-      queueGameLog(`process closed: ${code}`);
-      flushGameLogBuffer();
-      gameRunnerProcess = null;
-      gameTerminateInProgress = false;
-      mainWindow?.webContents.send('game:closed', code);
+    gameRunnerProcess = runner;
+    logLine('launcher', 'game runner worker started');
+
+    runner.on('message', message => {
+      if (!message || typeof message !== 'object') return;
+      if (message.type === 'ready') {
+        sendRunnerMessage(runner, { type: 'set-log-stream', enabled: gameLogStreamEnabled });
+        sendRunnerMessage(runner, { type: 'launch', opts: JSON.parse(JSON.stringify(opts)) });
+        logLine('launcher', 'game runner launch message sent');
+      }
+      if (message.type === 'progress') sendGameProgress(message.data);
+      if (message.type === 'download-status') sendDownloadStatus(message.data);
+      if (message.type === 'log') queueGameLog(message.data);
+      if (message.type === 'launched') {
+        logLine('launcher', 'game runner launched minecraft');
+        finishLaunch({ success: true });
+      }
+      if (message.type === 'error') {
+        logLine('crash', message.error || 'game runner failed');
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        finishLaunch({ success: false, error: message.error || 'Minecraft launch failed' });
+      }
+      if (message.type === 'closed') {
+        queueGameLog(`process closed: ${message.code}`);
+        flushGameLogBuffer();
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        gameTerminateInProgress = false;
+        mainWindow?.webContents.send('game:closed', message.code);
+      }
     });
 
-    launcher.launch(opts)
-      .then(childProcess => {
-        gameRunnerProcess = childProcess;
-        logLine('launcher', `minecraft process spawned: ${childProcess?.pid || 'unknown'}`);
-        finishLaunch({ success: true });
-      })
-      .catch(error => {
-        logLine('crash', error.stack || error.message);
-        gameRunnerProcess = null;
-        finishLaunch({ success: false, error: error.message || 'Minecraft launch failed' });
-      });
+    runner.on('error', error => {
+      if (gameRunnerProcess === runner) gameRunnerProcess = null;
+      logLine('crash', error.stack || error.message);
+      finishLaunch({ success: false, error: error.message || 'Minecraft worker failed' });
+    });
+
+    runner.on('exit', code => {
+      if (gameRunnerProcess === runner) gameRunnerProcess = null;
+      gameTerminateInProgress = false;
+      logLine('launcher', `game runner worker exit: ${code}`);
+      if (!settled && code !== 0) finishLaunch({ success: false, error: `Minecraft worker exited: ${code}` });
+    });
   });
 }
 
@@ -757,7 +803,7 @@ ipcMain.handle('game:launch', async () => {
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
     const sendGameProgress = createThrottledWindowSender('game:progress');
     const sendDownloadStatus = createThrottledWindowSender('game:download-status');
-    return await launchMinecraftDirect(opts, sendGameProgress, sendDownloadStatus);
+    return await launchMinecraftInWorker(opts, sendGameProgress, sendDownloadStatus);
     const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
     const runnerOpts = JSON.parse(JSON.stringify(opts));
 

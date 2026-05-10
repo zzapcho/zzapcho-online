@@ -3,12 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { fork } = require('child_process');
 
 let mainWindow;
 let mcToken = null;
 let lastManifest = null;
 let gameRunnerProcess = null;
+let gameLaunchInProgress = false;
 let lastServerApiErrorLogAt = 0;
 let setupProgressLastSentAt = 0;
 let setupProgressLastMessage = '';
@@ -151,22 +151,6 @@ function createThrottledWindowSender(channel, intervalMs = 150) {
       latest = null;
     }, intervalMs);
   };
-}
-
-function getChildNodeExecPath() {
-  const candidates = [process.execPath];
-  try { candidates.push(app.getPath('exe')); } catch {}
-  return candidates.find(candidate => candidate && fs.existsSync(candidate)) || process.execPath;
-}
-
-function forkGameRunner(runnerPath) {
-  return fork(runnerPath, [], {
-    cwd: __dirname,
-    execPath: getChildNodeExecPath(),
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-    windowsHide: true
-  });
 }
 
 function maskSensitive(value) {
@@ -612,8 +596,9 @@ ipcMain.handle('setup:run', async () => {
 
 ipcMain.handle('game:launch', async () => {
   if (!mcToken) return { success: false, error: 'Microsoft 로그인이 필요합니다.' };
-  if (gameRunnerProcess) return { success: false, error: '이미 Minecraft가 실행 중입니다.' };
+  if (gameLaunchInProgress || gameRunnerProcess) return { success: false, error: '이미 Minecraft가 실행 중입니다.' };
   try {
+    gameLaunchInProgress = true;
     const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
     const manifest = lastManifest || readJson(MANIFEST_CACHE, null);
     if (!manifest) throw new Error('manifest가 준비되지 않았습니다.');
@@ -643,60 +628,41 @@ ipcMain.handle('game:launch', async () => {
     if (settings.javaPath) opts.javaPath = settings.javaPath;
 
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
-    const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
     const sendGameProgress = createThrottledWindowSender('game:progress');
     const sendDownloadStatus = createThrottledWindowSender('game:download-status');
 
-    return await new Promise(resolve => {
-      let settled = false;
-      const finishLaunch = result => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
+    const { Client } = require('minecraft-launcher-core');
+    const launcher = new Client();
 
-      const runner = forkGameRunner(runnerPath);
-      gameRunnerProcess = runner;
-
-      runner.once('spawn', () => {
-        try {
-          runner.send({ type: 'launch', opts });
-        } catch (error) {
-          logLine('crash', error.stack || error.message);
-          finishLaunch({ success: false, error: error.message });
-        }
-      });
-
-      runner.on('message', message => {
-        if (!message || typeof message !== 'object') return;
-        if (message.type === 'progress') sendGameProgress(message.data);
-        if (message.type === 'download-status') sendDownloadStatus(message.data);
-        if (message.type === 'log') queueGameLog(message.data);
-        if (message.type === 'launched') finishLaunch({ success: true });
-        if (message.type === 'error') {
-          logLine('crash', message.error || 'game runner failed');
-          finishLaunch({ success: false, error: message.error || '게임 실행 실패' });
-        }
-        if (message.type === 'closed') {
-          queueGameLog(`process closed: ${message.code}`);
-          flushGameLogBuffer();
-          mainWindow?.webContents.send('game:closed', message.code);
-        }
-      });
-
-      runner.on('exit', code => {
-        if (gameRunnerProcess === runner) gameRunnerProcess = null;
-        if (!settled && code !== 0) finishLaunch({ success: false, error: `게임 실행 프로세스 종료: ${code}` });
-      });
-
-      runner.on('error', error => {
-        if (gameRunnerProcess === runner) gameRunnerProcess = null;
-        logLine('crash', error.stack || error.message);
-        finishLaunch({ success: false, error: error.message });
-      });
+    launcher.on('progress', data => sendGameProgress(data));
+    launcher.on('download-status', data => sendDownloadStatus(data));
+    launcher.on('data', data => queueGameLog(normalizeLog(data)));
+    launcher.on('debug', data => logLine('launcher', normalizeLog(data)));
+    launcher.on('close', code => {
+      queueGameLog(`process closed: ${code}`);
+      flushGameLogBuffer();
+      gameRunnerProcess = null;
+      mainWindow?.webContents.send('game:closed', code);
     });
+
+    const minecraftProcess = await launcher.launch(opts);
+    gameLaunchInProgress = false;
+    if (!minecraftProcess) {
+      gameRunnerProcess = null;
+      return { success: false, error: '게임 실행 실패' };
+    }
+
+    gameRunnerProcess = minecraftProcess;
+    minecraftProcess.on('error', error => {
+      if (gameRunnerProcess === minecraftProcess) gameRunnerProcess = null;
+      logLine('crash', error.stack || error.message);
+      mainWindow?.webContents.send('game:closed', 1);
+    });
+
+    return { success: true };
   } catch (error) {
     logLine('crash', error.stack || error.message);
+    gameLaunchInProgress = false;
     gameRunnerProcess = null;
     return { success: false, error: error.message };
   }

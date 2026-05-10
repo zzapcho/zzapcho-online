@@ -3,7 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { spawn, fork } = require('child_process');
+const { spawn } = require('child_process');
+const { Client } = require('minecraft-launcher-core');
 
 let mainWindow;
 let mcToken = null;
@@ -214,6 +215,44 @@ function sendRunnerMessage(processRef, message) {
   if (typeof processRef.postMessage === 'function') return processRef.postMessage(message);
   if (typeof processRef.send === 'function') return processRef.send(message);
   throw new Error('game runner process does not support IPC');
+}
+
+function launchMinecraftDirect(opts, sendGameProgress, sendDownloadStatus) {
+  return new Promise(resolve => {
+    let settled = false;
+    const launcher = new Client();
+
+    const finishLaunch = result => {
+      if (settled) return;
+      settled = true;
+      gameLaunchInProgress = false;
+      resolve(result);
+    };
+
+    launcher.on('progress', sendGameProgress);
+    launcher.on('download-status', sendDownloadStatus);
+    launcher.on('data', event => queueGameLog(normalizeLog(event)));
+    launcher.on('debug', event => queueGameLog(`[debug] ${normalizeLog(event)}`));
+    launcher.on('close', code => {
+      queueGameLog(`process closed: ${code}`);
+      flushGameLogBuffer();
+      gameRunnerProcess = null;
+      gameTerminateInProgress = false;
+      mainWindow?.webContents.send('game:closed', code);
+    });
+
+    launcher.launch(opts)
+      .then(childProcess => {
+        gameRunnerProcess = childProcess;
+        logLine('launcher', `minecraft process spawned: ${childProcess?.pid || 'unknown'}`);
+        finishLaunch({ success: true });
+      })
+      .catch(error => {
+        logLine('crash', error.stack || error.message);
+        gameRunnerProcess = null;
+        finishLaunch({ success: false, error: error.message || 'Minecraft launch failed' });
+      });
+  });
 }
 
 function maskSensitive(value) {
@@ -718,6 +757,7 @@ ipcMain.handle('game:launch', async () => {
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
     const sendGameProgress = createThrottledWindowSender('game:progress');
     const sendDownloadStatus = createThrottledWindowSender('game:download-status');
+    return await launchMinecraftDirect(opts, sendGameProgress, sendDownloadStatus);
     const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
     const runnerOpts = JSON.parse(JSON.stringify(opts));
 

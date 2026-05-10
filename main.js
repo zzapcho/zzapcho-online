@@ -153,6 +153,22 @@ function createThrottledWindowSender(channel, intervalMs = 150) {
   };
 }
 
+function getChildNodeExecPath() {
+  const candidates = [process.execPath];
+  try { candidates.push(app.getPath('exe')); } catch {}
+  return candidates.find(candidate => candidate && fs.existsSync(candidate)) || process.execPath;
+}
+
+function forkGameRunner(runnerPath) {
+  return fork(runnerPath, [], {
+    cwd: __dirname,
+    execPath: getChildNodeExecPath(),
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    windowsHide: true
+  });
+}
+
 function maskSensitive(value) {
   return String(value)
     .replace(/(access[_-]?token|refresh[_-]?token|bearer|authorization|session[_-]?id)(["'\s:=]+)[^"'\s,}]+/gi, '$1$2[masked]')
@@ -639,12 +655,17 @@ ipcMain.handle('game:launch', async () => {
         resolve(result);
       };
 
-      const runner = fork(runnerPath, [], {
-        cwd: __dirname,
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        windowsHide: true
-      });
+      const runner = forkGameRunner(runnerPath);
       gameRunnerProcess = runner;
+
+      runner.once('spawn', () => {
+        try {
+          runner.send({ type: 'launch', opts });
+        } catch (error) {
+          logLine('crash', error.stack || error.message);
+          finishLaunch({ success: false, error: error.message });
+        }
+      });
 
       runner.on('message', message => {
         if (!message || typeof message !== 'object') return;
@@ -673,8 +694,6 @@ ipcMain.handle('game:launch', async () => {
         logLine('crash', error.stack || error.message);
         finishLaunch({ success: false, error: error.message });
       });
-
-      runner.send({ type: 'launch', opts });
     });
   } catch (error) {
     logLine('crash', error.stack || error.message);
@@ -802,7 +821,7 @@ async function fetchServerStatus() {
   const api = await withTimeout(apiPromise, ping.online ? 120 : 600, null);
 
   try {
-    if (typeof api.online === 'boolean') {
+    if (api && typeof api.online === 'boolean') {
       const apiSamplePlayers = normalizeSamplePlayers(api.samplePlayers ?? api.players?.sample);
       return {
         online: api.online,

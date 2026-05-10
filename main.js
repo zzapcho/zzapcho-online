@@ -3,12 +3,14 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const { spawn } = require('child_process');
 
 let mainWindow;
 let mcToken = null;
 let lastManifest = null;
 let gameRunnerProcess = null;
 let gameLaunchInProgress = false;
+let gameTerminateInProgress = false;
 let lastServerApiErrorLogAt = 0;
 let setupProgressLastSentAt = 0;
 let setupProgressLastMessage = '';
@@ -161,6 +163,44 @@ function normalizeLog(event) {
   } catch {
     return String(event);
   }
+}
+
+function forceKillGameProcess(processRef) {
+  if (!processRef) return Promise.resolve(false);
+  if (process.platform !== 'win32') {
+    try {
+      processRef.kill('SIGKILL');
+      return Promise.resolve(true);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  const pid = processRef.pid;
+  if (!pid) {
+    try {
+      processRef.kill();
+      return Promise.resolve(true);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  return new Promise(resolve => {
+    const killer = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'ignore'
+    });
+    killer.on('exit', code => resolve(code === 0 || code === 128));
+    killer.on('error', () => {
+      try {
+        processRef.kill();
+        resolve(true);
+      } catch {
+        resolve(false);
+      }
+    });
+  });
 }
 
 function maskSensitive(value) {
@@ -652,6 +692,8 @@ ipcMain.handle('game:launch', async () => {
       queueGameLog(`process closed: ${code}`);
       flushGameLogBuffer();
       gameRunnerProcess = null;
+      gameLaunchInProgress = false;
+      gameTerminateInProgress = false;
       mainWindow?.webContents.send('game:closed', code);
     });
 
@@ -665,6 +707,8 @@ ipcMain.handle('game:launch', async () => {
     gameRunnerProcess = minecraftProcess;
     minecraftProcess.on('error', error => {
       if (gameRunnerProcess === minecraftProcess) gameRunnerProcess = null;
+      gameLaunchInProgress = false;
+      gameTerminateInProgress = false;
       logLine('crash', error.stack || error.message);
       mainWindow?.webContents.send('game:closed', 1);
     });
@@ -676,6 +720,22 @@ ipcMain.handle('game:launch', async () => {
     gameRunnerProcess = null;
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle('game:terminate', async () => {
+  if (!gameRunnerProcess) return { success: false, error: '실행 중인 Minecraft가 없습니다.' };
+  if (gameTerminateInProgress) return { success: false, error: '이미 종료 요청을 처리 중입니다.' };
+
+  gameTerminateInProgress = true;
+  queueGameLog('force terminate requested');
+  flushGameLogBuffer();
+
+  const killed = await forceKillGameProcess(gameRunnerProcess);
+  if (!killed) {
+    gameTerminateInProgress = false;
+    return { success: false, error: '강제 종료 요청에 실패했습니다.' };
+  }
+  return { success: true };
 });
 
 function stripMinecraftFormatting(value) {

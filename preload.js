@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('launcher', {
   onSetupProgress: cb => ipcRenderer.on('setup:progress', (_, data) => cb(data)),
 
   launch: () => ipcRenderer.invoke('game:launch'),
+  terminateGame: () => ipcRenderer.invoke('game:terminate'),
   onProgress: cb => ipcRenderer.on('game:progress', (_, data) => cb(data)),
   onDownloadStatus: cb => ipcRenderer.on('game:download-status', (_, data) => cb(data)),
   onGameClosed: cb => ipcRenderer.on('game:closed', (_, code) => cb(code)),

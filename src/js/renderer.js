@@ -48,6 +48,7 @@ const els = {
   logType: document.getElementById('log-type'),
   logQuery: document.getElementById('log-query'),
   logBody: document.getElementById('log-body'),
+  stopGameBtn: document.getElementById('btn-stop-game'),
   settingRamMin: document.getElementById('setting-ram-min'),
   settingRamMax: document.getElementById('setting-ram-max'),
   ramMinValue: document.getElementById('ram-min-value'),
@@ -106,6 +107,10 @@ function showToast(message, type = 'info') {
 function setPlayState(label, disabled = false) {
   els.playLabel.textContent = label;
   els.playBtn.disabled = disabled || !loggedIn || launcherUpdateRequired || launching;
+}
+
+function updateGameControls() {
+  if (els.stopGameBtn) els.stopGameBtn.disabled = !launching;
 }
 
 function setSetupVisible(visible) {
@@ -380,9 +385,12 @@ els.playBtn.addEventListener('click', async () => {
   const ready = await runSetupOnly();
   if (!ready) {
     launching = false;
+    updateGameControls();
     return;
   }
 
+  launching = true;
+  updateGameControls();
   setPlayState('게임 시작 중', true);
   els.progressSection.classList.add('visible');
   els.progressText.textContent = '실행 환경 준비 중';
@@ -393,6 +401,7 @@ els.playBtn.addEventListener('click', async () => {
   } else {
     showToast(`실행 실패: ${result.error || '오류 발생'}`, 'error');
     launching = false;
+    updateGameControls();
     setPlayState('오류 발생', true);
   }
 });
@@ -420,6 +429,7 @@ window.launcher.onDownloadStatus(event => {
 
 window.launcher.onGameClosed(code => {
   launching = false;
+  updateGameControls();
   els.progressSection.classList.remove('visible');
   setPlayState('실행하기');
   if (code === 0) showToast('게임이 종료되었습니다.', 'success');
@@ -480,6 +490,17 @@ els.logQuery.addEventListener('input', () => {
 document.getElementById('btn-copy-log').addEventListener('click', async () => {
   await navigator.clipboard.writeText(els.logBody.textContent);
   showToast('로그를 복사했습니다.', 'success');
+});
+els.stopGameBtn?.addEventListener('click', async () => {
+  if (!launching) return;
+  els.stopGameBtn.disabled = true;
+  const result = await window.launcher.terminateGame();
+  if (result.success) {
+    showToast('게임 강제 종료를 요청했습니다.', 'success');
+  } else {
+    showToast(`강제 종료 실패: ${result.error || '오류 발생'}`, 'error');
+    updateGameControls();
+  }
 });
 document.getElementById('btn-open-logs').addEventListener('click', () => window.launcher.openLogsFolder());
 document.getElementById('btn-open-crashes').addEventListener('click', () => window.launcher.openCrashesFolder());

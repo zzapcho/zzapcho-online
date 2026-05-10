@@ -1,9 +1,9 @@
-const { app, BrowserWindow, ipcMain, net, dialog, shell, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, net, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, fork } = require('child_process');
 
 let mainWindow;
 let mcToken = null;
@@ -207,6 +207,13 @@ function forceKillGameProcess(processRef) {
       }
     });
   });
+}
+
+function sendRunnerMessage(processRef, message) {
+  if (!processRef) throw new Error('game runner process is not available');
+  if (typeof processRef.postMessage === 'function') return processRef.postMessage(message);
+  if (typeof processRef.send === 'function') return processRef.send(message);
+  throw new Error('game runner process does not support IPC');
 }
 
 function maskSensitive(value) {
@@ -419,6 +426,27 @@ function compareVersions(a, b) {
   return 0;
 }
 
+function normalizeVersion(value) {
+  return String(value || '').trim().replace(/^v/i, '');
+}
+
+function maxVersion(...versions) {
+  return versions
+    .map(normalizeVersion)
+    .filter(Boolean)
+    .reduce((best, version) => (compareVersions(version, best) > 0 ? version : best), '0.0.0');
+}
+
+async function getLatestGithubReleaseVersion() {
+  try {
+    const release = await fetchJson('https://api.github.com/repos/zzapcho/zzapcho-online/releases/latest', 8000);
+    return normalizeVersion(release?.tag_name || release?.name);
+  } catch (error) {
+    logLine('update', `latest release check failed: ${error.message}`);
+    return '';
+  }
+}
+
 function sendSetupProgress(message, percent = -1, options = {}) {
   const now = Date.now();
   const force = Boolean(options.force) || percent >= 100 || message !== setupProgressLastMessage;
@@ -574,6 +602,8 @@ ipcMain.handle('update:check', async () => {
   try {
     const { manifest, source, error } = await loadManifest();
     const minimum = manifest.launcher?.minimumVersion || '0.0.0';
+    const latestGithubVersion = await getLatestGithubReleaseVersion();
+    const latestLauncherVersion = maxVersion(app.getVersion(), manifest.launcher?.latestVersion, latestGithubVersion);
     const launcherUpdateRequired = compareVersions(app.getVersion(), minimum) < 0;
     return {
       success: true,
@@ -582,7 +612,7 @@ ipcMain.handle('update:check', async () => {
       manifest,
       launcherUpdateRequired,
       currentLauncherVersion: app.getVersion(),
-      latestLauncherVersion: manifest.launcher?.latestVersion || app.getVersion()
+      latestLauncherVersion
     };
   } catch (error) {
     return { success: false, error: error.message };
@@ -689,6 +719,7 @@ ipcMain.handle('game:launch', async () => {
     const sendGameProgress = createThrottledWindowSender('game:progress');
     const sendDownloadStatus = createThrottledWindowSender('game:download-status');
     const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
+    const runnerOpts = JSON.parse(JSON.stringify(opts));
 
     return await new Promise(resolve => {
       let settled = false;
@@ -699,19 +730,40 @@ ipcMain.handle('game:launch', async () => {
         resolve(result);
       };
 
-      const runner = utilityProcess.fork(runnerPath, [], {
+      const runner = fork(runnerPath, [], {
         cwd: __dirname,
-        stdio: 'ignore',
-        serviceName: 'Zzapcho Minecraft Runner'
+        execPath: process.execPath,
+        execArgv: [],
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        windowsHide: true
       });
       gameRunnerProcess = runner;
+      logLine('launcher', 'game runner forked');
+      let launchMessageSent = false;
+      const sendLaunchMessage = () => {
+        if (launchMessageSent || gameRunnerProcess !== runner) return;
+        launchMessageSent = true;
+        try {
+          sendRunnerMessage(runner, { type: 'set-log-stream', enabled: gameLogStreamEnabled });
+          sendRunnerMessage(runner, { type: 'launch', opts: runnerOpts });
+          logLine('launcher', 'game runner launch message sent');
+        } catch (error) {
+          logLine('crash', `game runner message failed: ${error.stack || error.message}`);
+          finishLaunch({ success: false, error: error.message });
+        }
+      };
 
       runner.on('message', message => {
         if (!message || typeof message !== 'object') return;
+        if (message.type === 'ready') sendLaunchMessage();
         if (message.type === 'progress') sendGameProgress(message.data);
         if (message.type === 'download-status') sendDownloadStatus(message.data);
         if (message.type === 'log') queueGameLog(message.data);
-        if (message.type === 'launched') finishLaunch({ success: true });
+        if (message.type === 'launched') {
+          logLine('launcher', 'game runner launched minecraft');
+          finishLaunch({ success: true });
+        }
         if (message.type === 'error') {
           logLine('crash', message.error || 'game runner failed');
           finishLaunch({ success: false, error: message.error || '게임 실행 실패' });
@@ -726,13 +778,15 @@ ipcMain.handle('game:launch', async () => {
       });
 
       runner.once('spawn', () => {
-        runner.postMessage({ type: 'set-log-stream', enabled: gameLogStreamEnabled });
-        runner.postMessage({ type: 'launch', opts });
+        logLine('launcher', 'game runner spawned');
+        sendLaunchMessage();
       });
+      setTimeout(sendLaunchMessage, 250);
 
       runner.on('exit', code => {
         if (gameRunnerProcess === runner) gameRunnerProcess = null;
         gameTerminateInProgress = false;
+        logLine('launcher', `game runner exit: ${code}`);
         if (!settled) finishLaunch({ success: false, error: `게임 실행 프로세스 종료: ${code}` });
       });
 
@@ -879,8 +933,12 @@ function pingMinecraftServer(host, port, timeoutMs = 1800) {
 async function fetchServerStatus() {
   const server = getActiveServer();
   const canUseZzapchoStatusApi = server.host === DEFAULT_PROFILE.server.host && server.port === DEFAULT_PROFILE.server.port;
+  let apiError = null;
   const apiPromise = canUseZzapchoStatusApi
-    ? fetchJson('https://api.zzapcho.kr/server/status', 1200)
+    ? fetchJson('https://api.zzapcho.kr/server/status', 1200).catch(error => {
+      apiError = error;
+      return null;
+    })
     : Promise.resolve(null);
   const ping = await pingMinecraftServer(server.host, server.port, 1800);
   const api = await withTimeout(apiPromise, ping.online ? 120 : 600, null);
@@ -901,7 +959,7 @@ async function fetchServerStatus() {
         source: 'api'
       };
     }
-    if (!api) throw new Error('server api timeout or unavailable');
+    if (!api) throw new Error(apiError?.message || 'server api timeout or unavailable');
   } catch (error) {
     const now = Date.now();
     if (now - lastServerApiErrorLogAt > 60000) {
@@ -1047,8 +1105,8 @@ ipcMain.handle('logs:read', (_, type, query = '') => {
 ipcMain.on('logs:stream-game', (_, enabled) => {
   gameLogStreamEnabled = Boolean(enabled);
   if (!gameLogStreamEnabled) gameLogState.uiLines.length = 0;
-  if (gameRunnerProcess?.postMessage) {
-    try { gameRunnerProcess.postMessage({ type: 'set-log-stream', enabled: gameLogStreamEnabled }); } catch {}
+  if (gameRunnerProcess) {
+    try { sendRunnerMessage(gameRunnerProcess, { type: 'set-log-stream', enabled: gameLogStreamEnabled }); } catch {}
   }
 });
 

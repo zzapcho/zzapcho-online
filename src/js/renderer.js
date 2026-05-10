@@ -196,7 +196,9 @@ function applyManifest(manifest) {
   if (els.loginServerAddress) els.loginServerAddress.textContent = serverAddress;
   els.gameVersion.textContent = manifest.minecraft?.version || '-';
   updateModloaderBadge(manifest.minecraft);
-  els.latestLauncherVersion.textContent = manifest.launcher?.latestVersion || '-';
+  const currentVersion = els.currentLauncherVersion.textContent;
+  const manifestLatest = manifest.launcher?.latestVersion || currentVersion;
+  els.latestLauncherVersion.textContent = compareVersions(currentVersion, manifestLatest) > 0 ? currentVersion : manifestLatest;
   els.manifestVersion.textContent = manifest.manifestVersion || '-';
   refreshOfficialFiles();
 }

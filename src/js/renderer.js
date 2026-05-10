@@ -48,6 +48,7 @@ const els = {
   logType: document.getElementById('log-type'),
   logQuery: document.getElementById('log-query'),
   logBody: document.getElementById('log-body'),
+  refreshLogBtn: document.getElementById('btn-refresh-log'),
   stopGameBtn: document.getElementById('btn-stop-game'),
   settingRamMin: document.getElementById('setting-ram-min'),
   settingRamMax: document.getElementById('setting-ram-max'),
@@ -75,6 +76,8 @@ let launcherUpdateRequired = false;
 let currentManifest = null;
 let serverStatusTimer = null;
 let serverStatusInFlight = false;
+let pendingGameLog = '';
+let pendingGameLogTimer = null;
 
 function showView(name) {
   Object.values(views).forEach(view => view.classList.remove('active'));
@@ -90,6 +93,7 @@ function showPage(name) {
   if (['mods', 'resourcepacks'].includes(name)) refreshOfficialFiles();
   if (name === 'shaderpacks') refreshShaderpacks();
   if (name === 'logs') refreshLog();
+  updateGameLogStreaming();
 }
 
 function showToast(message, type = 'info') {
@@ -111,6 +115,32 @@ function setPlayState(label, disabled = false) {
 
 function updateGameControls() {
   if (els.stopGameBtn) els.stopGameBtn.disabled = !launching;
+}
+
+function shouldStreamGameLog() {
+  return pages.logs.classList.contains('active') && els.logType.value === 'game';
+}
+
+function updateGameLogStreaming() {
+  window.launcher.streamGameLog(shouldStreamGameLog());
+}
+
+function appendGameLog(line) {
+  pendingGameLog += line.endsWith('\n') ? line : `${line}\n`;
+  if (pendingGameLogTimer) return;
+  pendingGameLogTimer = setTimeout(() => {
+    pendingGameLogTimer = null;
+    if (!shouldStreamGameLog()) {
+      pendingGameLog = '';
+      updateGameLogStreaming();
+      return;
+    }
+    const nextText = `${els.logBody.textContent || ''}${pendingGameLog}`;
+    pendingGameLog = '';
+    const lines = nextText.split('\n');
+    els.logBody.textContent = lines.length > 2500 ? lines.slice(-2500).join('\n') : nextText;
+    els.logBody.scrollTop = els.logBody.scrollHeight;
+  }, 250);
 }
 
 function setSetupVisible(visible) {
@@ -437,13 +467,7 @@ window.launcher.onGameClosed(code => {
 });
 
 window.launcher.onGameLog(line => {
-  if (pages.logs.classList.contains('active') && els.logType.value === 'game') {
-    els.logBody.textContent += line.endsWith('\n') ? line : `${line}\n`;
-    if (els.logBody.textContent.length > 120000) {
-      els.logBody.textContent = els.logBody.textContent.slice(-120000);
-    }
-    els.logBody.scrollTop = els.logBody.scrollHeight;
-  }
+  if (shouldStreamGameLog()) appendGameLog(line);
 });
 
 window.launcher.onUpdaterStatus(data => {
@@ -476,16 +500,22 @@ window.launcher.onUpdaterDownloaded(version => {
 els.restartUpdateBtn.addEventListener('click', () => window.launcher.restartForUpdate());
 
 async function refreshLog() {
+  pendingGameLog = '';
+  updateGameLogStreaming();
   const text = await window.launcher.readLog(els.logType.value, els.logQuery.value.trim());
   els.logBody.textContent = text || '로그가 없습니다.';
   els.logBody.scrollTop = els.logBody.scrollHeight;
 }
 
-els.logType.addEventListener('change', refreshLog);
+els.logType.addEventListener('change', () => {
+  updateGameLogStreaming();
+  refreshLog();
+});
 els.logQuery.addEventListener('input', () => {
   clearTimeout(els.logQuery._timer);
   els.logQuery._timer = setTimeout(refreshLog, 250);
 });
+els.refreshLogBtn?.addEventListener('click', refreshLog);
 
 document.getElementById('btn-copy-log').addEventListener('click', async () => {
   await navigator.clipboard.writeText(els.logBody.textContent);
@@ -503,11 +533,6 @@ els.stopGameBtn?.addEventListener('click', async () => {
   }
 });
 document.getElementById('btn-open-logs').addEventListener('click', () => window.launcher.openLogsFolder());
-document.getElementById('btn-open-crashes').addEventListener('click', () => window.launcher.openCrashesFolder());
-document.getElementById('btn-support-zip').addEventListener('click', async () => {
-  const result = await window.launcher.createSupportZip();
-  showToast(result.success ? `지원 ZIP 생성: ${result.path}` : '지원 ZIP 생성 실패', result.success ? 'success' : 'error');
-});
 
 function syncRamLabels() {
   if (+els.settingRamMin.value > +els.settingRamMax.value) els.settingRamMax.value = els.settingRamMin.value;

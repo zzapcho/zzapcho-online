@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('launcher', {
   openLogsFolder: () => ipcRenderer.invoke('folder:open-logs'),
   openCrashesFolder: () => ipcRenderer.invoke('folder:open-crashes'),
   readLog: (type, query) => ipcRenderer.invoke('logs:read', type, query),
+  streamGameLog: enabled => ipcRenderer.send('logs:stream-game', enabled),
   createSupportZip: () => ipcRenderer.invoke('support:create-zip'),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),

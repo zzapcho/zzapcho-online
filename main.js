@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, net, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, net, dialog, shell, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -11,6 +11,7 @@ let lastManifest = null;
 let gameRunnerProcess = null;
 let gameLaunchInProgress = false;
 let gameTerminateInProgress = false;
+let gameLogStreamEnabled = false;
 let lastServerApiErrorLogAt = 0;
 let setupProgressLastSentAt = 0;
 let setupProgressLastMessage = '';
@@ -126,22 +127,27 @@ function flushGameLogBuffer() {
       if (error) fs.appendFileSync(path.join(LOG_PATH, 'crash.log'), `[${new Date().toISOString()}] ${error.message}\n`, 'utf8');
     });
   }
-  if (uiLines) mainWindow?.webContents.send('game:log', maskSensitive(uiLines));
+  if (uiLines && gameLogStreamEnabled) mainWindow?.webContents.send('game:log', maskSensitive(uiLines));
 }
 
 function queueGameLog(message) {
   const text = String(message || '').replace(/\r?\n$/, '');
   gameLogState.fileLines.push(`[${new Date().toISOString()}] ${text}\n`);
-  gameLogState.uiLines.push(`${text}\n`);
+  if (gameLogStreamEnabled) gameLogState.uiLines.push(`${text}\n`);
   if (!gameLogState.timer) {
     gameLogState.timer = setTimeout(() => {
       gameLogState.timer = null;
       flushGameLogBuffer();
-    }, 150);
+    }, 500);
   }
 }
 
-function createThrottledWindowSender(channel, intervalMs = 150) {
+function queueLiveGameLog(event, prefix = '') {
+  if (!gameLogStreamEnabled) return;
+  queueGameLog(`${prefix}${normalizeLog(event)}`);
+}
+
+function createThrottledWindowSender(channel, intervalMs = 500) {
   let latest = null;
   let timer = null;
   return data => {
@@ -493,8 +499,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1040,
     height: 680,
-    minWidth: 960,
-    minHeight: 620,
+    minWidth: 1040,
+    minHeight: 680,
+    resizable: true,
+    maximizable: true,
     frame: false,
     title: APP_NAME,
     icon: resolveAssetPath('build', 'favicon.ico'),
@@ -680,40 +688,61 @@ ipcMain.handle('game:launch', async () => {
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
     const sendGameProgress = createThrottledWindowSender('game:progress');
     const sendDownloadStatus = createThrottledWindowSender('game:download-status');
+    const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
 
-    const { Client } = require('minecraft-launcher-core');
-    const launcher = new Client();
+    return await new Promise(resolve => {
+      let settled = false;
+      const finishLaunch = result => {
+        if (settled) return;
+        settled = true;
+        gameLaunchInProgress = false;
+        resolve(result);
+      };
 
-    launcher.on('progress', data => sendGameProgress(data));
-    launcher.on('download-status', data => sendDownloadStatus(data));
-    launcher.on('data', data => queueGameLog(normalizeLog(data)));
-    launcher.on('debug', data => logLine('launcher', normalizeLog(data)));
-    launcher.on('close', code => {
-      queueGameLog(`process closed: ${code}`);
-      flushGameLogBuffer();
-      gameRunnerProcess = null;
-      gameLaunchInProgress = false;
-      gameTerminateInProgress = false;
-      mainWindow?.webContents.send('game:closed', code);
+      const runner = utilityProcess.fork(runnerPath, [], {
+        cwd: __dirname,
+        stdio: 'ignore',
+        serviceName: 'Zzapcho Minecraft Runner'
+      });
+      gameRunnerProcess = runner;
+
+      runner.on('message', message => {
+        if (!message || typeof message !== 'object') return;
+        if (message.type === 'progress') sendGameProgress(message.data);
+        if (message.type === 'download-status') sendDownloadStatus(message.data);
+        if (message.type === 'log') queueGameLog(message.data);
+        if (message.type === 'launched') finishLaunch({ success: true });
+        if (message.type === 'error') {
+          logLine('crash', message.error || 'game runner failed');
+          finishLaunch({ success: false, error: message.error || '게임 실행 실패' });
+        }
+        if (message.type === 'closed') {
+          queueGameLog(`process closed: ${message.code}`);
+          flushGameLogBuffer();
+          if (gameRunnerProcess === runner) gameRunnerProcess = null;
+          gameTerminateInProgress = false;
+          mainWindow?.webContents.send('game:closed', message.code);
+        }
+      });
+
+      runner.once('spawn', () => {
+        runner.postMessage({ type: 'set-log-stream', enabled: gameLogStreamEnabled });
+        runner.postMessage({ type: 'launch', opts });
+      });
+
+      runner.on('exit', code => {
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        gameTerminateInProgress = false;
+        if (!settled) finishLaunch({ success: false, error: `게임 실행 프로세스 종료: ${code}` });
+      });
+
+      runner.on('error', (type, location, report) => {
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        const detail = [type, location, report].filter(Boolean).join('\n');
+        logLine('crash', detail || 'game runner failed');
+        finishLaunch({ success: false, error: type || '게임 실행 프로세스 오류' });
+      });
     });
-
-    const minecraftProcess = await launcher.launch(opts);
-    gameLaunchInProgress = false;
-    if (!minecraftProcess) {
-      gameRunnerProcess = null;
-      return { success: false, error: '게임 실행 실패' };
-    }
-
-    gameRunnerProcess = minecraftProcess;
-    minecraftProcess.on('error', error => {
-      if (gameRunnerProcess === minecraftProcess) gameRunnerProcess = null;
-      gameLaunchInProgress = false;
-      gameTerminateInProgress = false;
-      logLine('crash', error.stack || error.message);
-      mainWindow?.webContents.send('game:closed', 1);
-    });
-
-    return { success: true };
   } catch (error) {
     logLine('crash', error.stack || error.message);
     gameLaunchInProgress = false;
@@ -1015,6 +1044,14 @@ ipcMain.handle('logs:read', (_, type, query = '') => {
   return text.split(/\r?\n/).filter(line => line.toLowerCase().includes(String(query).toLowerCase())).join('\n').slice(-120000);
 });
 
+ipcMain.on('logs:stream-game', (_, enabled) => {
+  gameLogStreamEnabled = Boolean(enabled);
+  if (!gameLogStreamEnabled) gameLogState.uiLines.length = 0;
+  if (gameRunnerProcess?.postMessage) {
+    try { gameRunnerProcess.postMessage({ type: 'set-log-stream', enabled: gameLogStreamEnabled }); } catch {}
+  }
+});
+
 function crc32(buffer) {
   let table = crc32.table;
   if (!table) {
@@ -1180,7 +1217,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   if (gameRunnerProcess) {
-    try { gameRunnerProcess.kill(); } catch {}
+    try { forceKillGameProcess(gameRunnerProcess); } catch {}
     gameRunnerProcess = null;
   }
 });

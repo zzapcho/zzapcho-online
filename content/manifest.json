@@ -133,8 +133,8 @@
     {
       "path": "resourcepacks/잡초리소스팩.zip",
       "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/resourcepacks/%EC%9E%A1%EC%B4%88%EB%A6%AC%EC%86%8C%EC%8A%A4%ED%8C%A9.zip",
-      "sha256": "cd203fbe4bc5e237f565a6e3f9f97373c995a2241ded38a895c80dc51a9c76a0",
-      "size": 1895332,
+      "sha256": "74b93efb8a7c9d18f4982387ceebaa067090951d21671972da3607bd131d6c45",
+      "size": 1842606,
       "required": true
     }
   ]

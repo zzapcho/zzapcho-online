@@ -131,10 +131,10 @@
       "required": true
     },
     {
-      "path": "resourcepacks/NewGlowingOres-§6[Border]§r.zip",
-      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/resourcepacks/NewGlowingOres-%C2%A76%5BBorder%5D%C2%A7r.zip",
-      "sha256": "623ef37ea6821f3d02e68631fcca20ac18fe95647af580a279604a9314203f0b",
-      "size": 344937,
+      "path": "resourcepacks/잡초리소스팩.zip",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/resourcepacks/%EC%9E%A1%EC%B4%88%EB%A6%AC%EC%86%8C%EC%8A%A4%ED%8C%A9.zip",
+      "sha256": "cd203fbe4bc5e237f565a6e3f9f97373c995a2241ded38a895c80dc51a9c76a0",
+      "size": 1895332,
       "required": true
     }
   ]

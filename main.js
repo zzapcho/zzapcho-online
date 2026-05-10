@@ -153,6 +153,16 @@ function createThrottledWindowSender(channel, intervalMs = 150) {
   };
 }
 
+function normalizeLog(event) {
+  if (typeof event === 'string') return event;
+  if (event?.data) return event.data;
+  try {
+    return JSON.stringify(event);
+  } catch {
+    return String(event);
+  }
+}
+
 function maskSensitive(value) {
   return String(value)
     .replace(/(access[_-]?token|refresh[_-]?token|bearer|authorization|session[_-]?id)(["'\s:=]+)[^"'\s,}]+/gi, '$1$2[masked]')

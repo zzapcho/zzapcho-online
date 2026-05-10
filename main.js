@@ -3,10 +3,15 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const { fork } = require('child_process');
 
 let mainWindow;
 let mcToken = null;
 let lastManifest = null;
+let gameRunnerProcess = null;
+let lastServerApiErrorLogAt = 0;
+let setupProgressLastSentAt = 0;
+let setupProgressLastMessage = '';
 
 const APP_NAME = '잡초 약탈서버 런처';
 const INTERNAL_NAME = 'Zzapcho Online';
@@ -20,6 +25,7 @@ const AUTH_FILE = path.join(DATA_PATH, 'auth.json');
 const MANIFEST_CACHE = path.join(DATA_PATH, 'manifest.json');
 const CONFIG_PATH = path.join(__dirname, 'launcher.config.json');
 const BUNDLED_MANIFEST = path.join(__dirname, 'content', 'manifest.json');
+const BUNDLED_PROFILE = path.join(__dirname, 'content', 'profile.json');
 const PROTECTED_DIRECTORIES = ['mods', 'resourcepacks'];
 const USER_SHADER_DIRECTORY = 'shaderpacks';
 const DEFAULT_PROFILE = {
@@ -55,6 +61,32 @@ function readJson(filePath, fallback) {
 function writeJson(filePath, data) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+function validateServer(server) {
+  if (!server || typeof server.host !== 'string' || !server.host.trim()) {
+    throw new Error('server.host가 필요합니다.');
+  }
+  if (!Number.isInteger(server.port) || server.port < 1 || server.port > 65535) {
+    throw new Error('server.port는 1-65535 사이의 정수여야 합니다.');
+  }
+}
+
+function getBundledProfile() {
+  return readJson(BUNDLED_PROFILE, null);
+}
+
+function getActiveServer() {
+  return lastManifest?.server || getBundledProfile()?.server || PROFILE.server;
+}
+
+function getActiveServerEntry() {
+  const server = getActiveServer();
+  return {
+    name: lastManifest?.displayName || getBundledProfile()?.displayName || PROFILE.name,
+    ip: server.host,
+    port: server.port
+  };
 }
 
 function ensureDirs() {
@@ -204,11 +236,15 @@ function downloadFile(url, destPath, onProgress) {
   });
 }
 
-function sha256File(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  const hash = crypto.createHash('sha256');
-  hash.update(fs.readFileSync(filePath));
-  return hash.digest('hex');
+function sha256FileAsync(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(filePath)) return resolve(null);
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
 }
 
 function assertSafeRelativePath(relativePath) {
@@ -273,9 +309,7 @@ function listUserShaderpacks() {
 function validateManifest(manifest) {
   if (!manifest || manifest.schemaVersion !== 1) throw new Error('manifest schemaVersion이 올바르지 않습니다.');
   if (manifest.profileId !== PROFILE.id) throw new Error('manifest profileId가 런처 profile과 다릅니다.');
-  if (manifest.server?.host !== PROFILE.server.host || manifest.server?.port !== PROFILE.server.port) {
-    throw new Error('manifest 서버 정보가 런처 고정 서버와 다릅니다.');
-  }
+  validateServer(manifest.server);
   if (!manifest.minecraft?.version || !manifest.minecraft?.loader || !manifest.minecraft?.loaderVersion) {
     throw new Error('manifest Minecraft/loader 정보가 부족합니다.');
   }
@@ -329,7 +363,12 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function sendSetupProgress(message, percent = -1) {
+function sendSetupProgress(message, percent = -1, options = {}) {
+  const now = Date.now();
+  const force = Boolean(options.force) || percent >= 100 || message !== setupProgressLastMessage;
+  if (!force && now - setupProgressLastSentAt < 250) return;
+  setupProgressLastSentAt = now;
+  setupProgressLastMessage = message;
   logLine('launcher', message);
   mainWindow?.webContents.send('setup:progress', { message, percent });
 }
@@ -366,7 +405,7 @@ async function syncOfficialFiles(manifest) {
 
   for (const file of manifest.files) {
     const localPath = resolveGamePath(file.path);
-    const actual = sha256File(localPath);
+    const actual = await sha256FileAsync(localPath);
     if (actual !== file.sha256) {
       if (actual && manifest.sync?.quarantineUnknownFiles) quarantineFile(localPath, 'sha256 mismatch');
       toDownload.push(file);
@@ -389,7 +428,7 @@ async function syncOfficialFiles(manifest) {
       const inner = current / total / Math.max(toDownload.length, 1);
       sendSetupProgress(`공식 파일 다운로드 중: ${path.basename(file.path)}`, Math.round(20 + ((i / Math.max(toDownload.length, 1)) + inner) * 65));
     });
-    const downloadedHash = sha256File(localPath);
+    const downloadedHash = await sha256FileAsync(localPath);
     if (downloadedHash !== file.sha256) {
       quarantineFile(localPath, 'downloaded sha256 mismatch');
       throw new Error(`다운로드 파일 검증 실패: ${file.path}`);
@@ -465,8 +504,8 @@ ipcMain.handle('profile:get', async () => {
   const manifest = lastManifest || readJson(MANIFEST_CACHE, null) || readJson(BUNDLED_MANIFEST, null);
   return {
     id: PROFILE.id,
-    name: PROFILE.name,
-    server: PROFILE.server,
+    name: manifest?.displayName || getBundledProfile()?.displayName || PROFILE.name,
+    server: manifest?.server || getActiveServer(),
     manifestUrl: PROFILE.manifestUrl,
     appVersion: app.getVersion(),
     manifest
@@ -494,7 +533,9 @@ ipcMain.handle('update:check', async () => {
 
 ipcMain.handle('setup:run', async () => {
   try {
-    sendSetupProgress('manifest 확인 중', 5);
+    setupProgressLastSentAt = 0;
+    setupProgressLastMessage = '';
+    sendSetupProgress('manifest 확인 중', 5, { force: true });
     const { manifest } = await loadManifest();
     const minimum = manifest.launcher?.minimumVersion || '0.0.0';
     if (compareVersions(app.getVersion(), minimum) < 0) {
@@ -539,8 +580,8 @@ ipcMain.handle('setup:run', async () => {
     const syncResult = await syncOfficialFiles(manifest);
 
     try {
-      const { writeServersDat } = require('./lib/servers');
-      writeServersDat(GAME_PATH, [{ name: PROFILE.name, ip: PROFILE.server.host, port: PROFILE.server.port }], []);
+      const { ensureServerEntry } = require('./lib/servers');
+      ensureServerEntry(GAME_PATH, getActiveServerEntry());
     } catch (error) {
       logLine('launcher', `servers.dat write failed: ${error.message}`);
     }
@@ -555,8 +596,8 @@ ipcMain.handle('setup:run', async () => {
 
 ipcMain.handle('game:launch', async () => {
   if (!mcToken) return { success: false, error: 'Microsoft 로그인이 필요합니다.' };
+  if (gameRunnerProcess) return { success: false, error: '이미 Minecraft가 실행 중입니다.' };
   try {
-    const { Client } = require('minecraft-launcher-core');
     const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
     const manifest = lastManifest || readJson(MANIFEST_CACHE, null);
     if (!manifest) throw new Error('manifest가 준비되지 않았습니다.');
@@ -568,21 +609,6 @@ ipcMain.handle('game:launch', async () => {
     let customVersion = null;
     if (loader === 'fabric') customVersion = modloader.getInstalledFabricId(GAME_PATH, gameVersion, loaderVersion);
     if (loader === 'forge') customVersion = modloader.getInstalledForgeId(GAME_PATH, gameVersion);
-
-    const launcher = new Client();
-    const sendGameProgress = createThrottledWindowSender('game:progress');
-    const sendDownloadStatus = createThrottledWindowSender('game:download-status');
-    launcher.on('progress', sendGameProgress);
-    launcher.on('download-status', sendDownloadStatus);
-    launcher.on('close', code => {
-      queueGameLog(`process closed: ${code}`);
-      flushGameLogBuffer();
-      mainWindow?.webContents.send('game:closed', code);
-    });
-    launcher.on('data', event => {
-      const text = typeof event === 'string' ? event : event?.data || JSON.stringify(event);
-      queueGameLog(text);
-    });
 
     const opts = {
       authorization: mcToken,
@@ -601,10 +627,58 @@ ipcMain.handle('game:launch', async () => {
     if (settings.javaPath) opts.javaPath = settings.javaPath;
 
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
-    await launcher.launch(opts);
-    return { success: true };
+    const runnerPath = path.join(__dirname, 'lib', 'game-runner.js');
+    const sendGameProgress = createThrottledWindowSender('game:progress');
+    const sendDownloadStatus = createThrottledWindowSender('game:download-status');
+
+    return await new Promise(resolve => {
+      let settled = false;
+      const finishLaunch = result => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      const runner = fork(runnerPath, [], {
+        cwd: __dirname,
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        windowsHide: true
+      });
+      gameRunnerProcess = runner;
+
+      runner.on('message', message => {
+        if (!message || typeof message !== 'object') return;
+        if (message.type === 'progress') sendGameProgress(message.data);
+        if (message.type === 'download-status') sendDownloadStatus(message.data);
+        if (message.type === 'log') queueGameLog(message.data);
+        if (message.type === 'launched') finishLaunch({ success: true });
+        if (message.type === 'error') {
+          logLine('crash', message.error || 'game runner failed');
+          finishLaunch({ success: false, error: message.error || '게임 실행 실패' });
+        }
+        if (message.type === 'closed') {
+          queueGameLog(`process closed: ${message.code}`);
+          flushGameLogBuffer();
+          mainWindow?.webContents.send('game:closed', message.code);
+        }
+      });
+
+      runner.on('exit', code => {
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        if (!settled && code !== 0) finishLaunch({ success: false, error: `게임 실행 프로세스 종료: ${code}` });
+      });
+
+      runner.on('error', error => {
+        if (gameRunnerProcess === runner) gameRunnerProcess = null;
+        logLine('crash', error.stack || error.message);
+        finishLaunch({ success: false, error: error.message });
+      });
+
+      runner.send({ type: 'launch', opts });
+    });
   } catch (error) {
     logLine('crash', error.stack || error.message);
+    gameRunnerProcess = null;
     return { success: false, error: error.message };
   }
 });
@@ -616,7 +690,35 @@ function stripMinecraftFormatting(value) {
   return '';
 }
 
-function pingMinecraftServer(host, port) {
+function normalizeSamplePlayers(players) {
+  if (!Array.isArray(players)) return [];
+  return players
+    .map(player => {
+      if (typeof player === 'string') return stripMinecraftFormatting(player);
+      if (typeof player?.name === 'string') return stripMinecraftFormatting(player.name);
+      if (typeof player?.displayName === 'string') return stripMinecraftFormatting(player.displayName);
+      return '';
+    })
+    .map(name => name.trim())
+    .filter(Boolean);
+}
+
+function withTimeout(promise, timeoutMs, fallback = null) {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
+    promise
+      .then(value => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
+
+function pingMinecraftServer(host, port, timeoutMs = 1800) {
   return new Promise(resolve => {
     const socket = require('net').createConnection({ host, port });
     let buffer = Buffer.alloc(0);
@@ -628,7 +730,7 @@ function pingMinecraftServer(host, port) {
       socket.destroy();
       resolve(result);
     };
-    socket.setTimeout(5000);
+    socket.setTimeout(timeoutMs);
     socket.on('timeout', () => finish({ online: false }));
     socket.on('error', () => finish({ online: false }));
     socket.on('connect', () => {
@@ -680,7 +782,7 @@ function pingMinecraftServer(host, port) {
           port,
           onlineCount: json.players?.online ?? 0,
           maxCount: json.players?.max ?? 0,
-          samplePlayers: (json.players?.sample || []).map(player => player.name),
+          samplePlayers: normalizeSamplePlayers(json.players?.sample),
           motd: stripMinecraftFormatting(json.description),
           version: json.version?.name || '',
           ping: Date.now() - started
@@ -691,26 +793,39 @@ function pingMinecraftServer(host, port) {
 }
 
 async function fetchServerStatus() {
+  const server = getActiveServer();
+  const canUseZzapchoStatusApi = server.host === DEFAULT_PROFILE.server.host && server.port === DEFAULT_PROFILE.server.port;
+  const apiPromise = canUseZzapchoStatusApi
+    ? fetchJson('https://api.zzapcho.kr/server/status', 1200)
+    : Promise.resolve(null);
+  const ping = await pingMinecraftServer(server.host, server.port, 1800);
+  const api = await withTimeout(apiPromise, ping.online ? 120 : 600, null);
+
   try {
-    const api = await fetchJson('https://api.zzapcho.kr/server/status', 4000);
     if (typeof api.online === 'boolean') {
+      const apiSamplePlayers = normalizeSamplePlayers(api.samplePlayers ?? api.players?.sample);
       return {
         online: api.online,
-        host: PROFILE.server.host,
-        port: PROFILE.server.port,
-        onlineCount: api.onlineCount ?? api.players?.online ?? 0,
-        maxCount: api.maxCount ?? api.players?.max ?? 0,
-        samplePlayers: api.samplePlayers ?? api.players?.sample ?? [],
-        motd: api.motd || '',
-        version: api.version || '',
-        ping: api.ping ?? null,
+        host: server.host,
+        port: server.port,
+        onlineCount: api.onlineCount ?? api.players?.online ?? ping.onlineCount ?? 0,
+        maxCount: api.maxCount ?? api.players?.max ?? ping.maxCount ?? 0,
+        samplePlayers: apiSamplePlayers.length ? apiSamplePlayers : normalizeSamplePlayers(ping.samplePlayers),
+        motd: api.motd || ping.motd || '',
+        version: api.version || ping.version || '',
+        ping: api.ping ?? ping.ping ?? null,
         source: 'api'
       };
     }
+    if (!api) throw new Error('server api timeout or unavailable');
   } catch (error) {
-    logLine('launcher', `server api failed: ${error.message}`);
+    const now = Date.now();
+    if (now - lastServerApiErrorLogAt > 60000) {
+      lastServerApiErrorLogAt = now;
+      logLine('launcher', `server api failed: ${error.message}`);
+    }
   }
-  return { ...(await pingMinecraftServer(PROFILE.server.host, PROFILE.server.port)), source: 'minecraft-ping' };
+  return { ...ping, source: 'minecraft-ping' };
 }
 
 ipcMain.handle('server:status', fetchServerStatus);
@@ -930,7 +1045,7 @@ ipcMain.handle('support:create-zip', async () => {
       appVersion: app.getVersion(),
       os: `${os.type()} ${os.release()} ${os.arch()}`,
       minecraft: manifest?.minecraft,
-      server: PROFILE.server,
+      server: getActiveServer(),
       manifestVersion: manifest?.manifestVersion,
       settings: safeSettings
     }, null, 2) },
@@ -999,12 +1114,20 @@ function initAutoUpdater() {
 }
 
 app.setName(APP_NAME);
+if (process.platform === 'win32') app.setAppUserModelId('com.zzapcho.online');
 
 app.whenReady().then(() => {
   ensureDirs();
   logLine('launcher', `${INTERNAL_NAME} ${app.getVersion()} started`);
   createWindow();
   if (app.isPackaged) setTimeout(initAutoUpdater, 2000);
+});
+
+app.on('before-quit', () => {
+  if (gameRunnerProcess) {
+    try { gameRunnerProcess.kill(); } catch {}
+    gameRunnerProcess = null;
+  }
 });
 
 app.on('window-all-closed', () => app.quit());

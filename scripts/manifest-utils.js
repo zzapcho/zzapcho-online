@@ -92,7 +92,9 @@ function validateProfile(profile) {
   if (profile.schemaVersion !== 1) throw new Error('profile.schemaVersion은 1이어야 합니다.');
   if (profile.profileId !== 'zzapcho-online-main') throw new Error('profileId가 zzapcho-online-main이 아닙니다.');
   if (profile.displayName !== '잡초 약탈서버') throw new Error('displayName이 잡초 약탈서버가 아닙니다.');
-  if (!profile.server || profile.server.host !== 'online.zzapcho.kr') throw new Error('server.host가 online.zzapcho.kr이 아닙니다.');
+  if (!profile.server || typeof profile.server.host !== 'string' || !profile.server.host.trim()) {
+    throw new Error('server.host가 필요합니다.');
+  }
   if (!Number.isInteger(profile.server.port) || profile.server.port < 1 || profile.server.port > 65535) {
     throw new Error('server.port는 1-65535 사이의 정수여야 합니다.');
   }

@@ -245,7 +245,10 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 16px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
+
+.setup-box.is-hidden { display: none; }
 
 .setup-row {
   display: flex;
@@ -352,6 +355,18 @@ body {
 
 .server-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .server-card-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.server-address {
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+  border-bottom: 1px dotted transparent;
+  outline: none;
+}
+.server-address:hover,
+.server-address:focus-visible {
+  color: var(--accent-hover);
+  border-bottom-color: rgba(216, 182, 106, 0.65);
+}
 .server-motd { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .server-players { font-weight: 800; color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
 .server-players.has-players { color: var(--green); }
@@ -587,33 +602,51 @@ body {
 
 .update-bar { width: 360px; margin-top: 16px; }
 
-#page-logs { gap: 0; padding: 0; }
+#page-logs {
+  gap: 14px;
+  padding: 24px 28px;
+  overflow: hidden;
+}
 
 .log-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 20px 28px 12px;
+  padding: 0;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
 }
 
 .log-header h2 { font-size: 16px; font-weight: 700; }
-.log-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.log-search { width: 150px; }
+.log-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: 8px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.log-search { width: 220px; max-width: 220px; }
 
 .log-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px 28px;
+  padding: 14px 16px;
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: 11px;
   line-height: 1.6;
   color: #d0c7b6;
+  background: #11100e;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   user-select: text;
   -webkit-user-select: text;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .btn { border: none; cursor: pointer; font-family: inherit; transition: all var(--transition); }

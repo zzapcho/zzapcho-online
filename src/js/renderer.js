@@ -16,6 +16,7 @@ const pages = {
 
 const els = {
   loginBtn: document.getElementById('btn-login'),
+  loginServerAddress: document.getElementById('login-server-address'),
   logoutBtn: document.getElementById('btn-logout'),
   avatar: document.getElementById('player-avatar'),
   playerName: document.getElementById('player-name'),
@@ -23,12 +24,14 @@ const els = {
   playLabel: document.getElementById('play-label'),
   gameVersion: document.getElementById('game-version'),
   modloaderBadge: document.getElementById('modloader-badge'),
+  setupBox: document.getElementById('setup-box'),
   setupText: document.getElementById('setup-text'),
   setupBar: document.getElementById('setup-bar'),
   progressSection: document.getElementById('progress-section'),
   progressFill: document.getElementById('progress-fill'),
   progressText: document.getElementById('progress-text'),
   serverCard: document.getElementById('server-card'),
+  serverAddress: document.getElementById('server-address'),
   serverDot: document.getElementById('server-dot'),
   serverPlayers: document.getElementById('server-players'),
   serverVersion: document.getElementById('server-version'),
@@ -69,6 +72,8 @@ let loggedIn = false;
 let launching = false;
 let launcherUpdateRequired = false;
 let currentManifest = null;
+let serverStatusTimer = null;
+let serverStatusInFlight = false;
 
 function showView(name) {
   Object.values(views).forEach(view => view.classList.remove('active'));
@@ -103,6 +108,16 @@ function setPlayState(label, disabled = false) {
   els.playBtn.disabled = disabled || !loggedIn || launcherUpdateRequired || launching;
 }
 
+function setSetupVisible(visible) {
+  els.setupBox?.classList.toggle('is-hidden', !visible);
+}
+
+function markSetupReady() {
+  els.setupText.textContent = '실행 준비 완료';
+  els.setupBar.style.width = '100%';
+  setTimeout(() => setSetupVisible(false), 350);
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
   if (bytes < 1024) return `${bytes} B`;
@@ -133,9 +148,17 @@ function updateModloaderBadge(minecraft) {
   els.modloaderBadge.textContent = `${loader} ${version}`.trim();
 }
 
+function formatServerAddress(server) {
+  if (!server?.host) return 'online.zzapcho.kr';
+  return server.port && server.port !== 25565 ? `${server.host}:${server.port}` : server.host;
+}
+
 function applyManifest(manifest) {
   if (!manifest) return;
   currentManifest = manifest;
+  const serverAddress = formatServerAddress(manifest.server);
+  if (els.serverAddress) els.serverAddress.textContent = serverAddress;
+  if (els.loginServerAddress) els.loginServerAddress.textContent = serverAddress;
   els.gameVersion.textContent = manifest.minecraft?.version || '-';
   updateModloaderBadge(manifest.minecraft);
   els.latestLauncherVersion.textContent = manifest.launcher?.latestVersion || '-';
@@ -145,6 +168,9 @@ function applyManifest(manifest) {
 
 async function refreshProfile() {
   const profile = await window.launcher.getProfile();
+  const serverAddress = formatServerAddress(profile.server || profile.manifest?.server);
+  if (els.serverAddress) els.serverAddress.textContent = serverAddress;
+  if (els.loginServerAddress) els.loginServerAddress.textContent = serverAddress;
   els.aboutVersion.textContent = profile.appVersion;
   els.currentLauncherVersion.textContent = profile.appVersion;
   els.launcherVersion.textContent = `런처 버전 v${profile.appVersion}`;
@@ -174,16 +200,18 @@ async function checkManifestUpdate() {
     setPlayState('런처 업데이트 필요', true);
   } else if (hasNewLauncherVersion) {
     els.updateStatus.textContent = '새 런처 버전이 있습니다';
-    setPlayState(loggedIn ? '입장하기' : '로그인 필요', !loggedIn);
+    setPlayState(loggedIn ? '실행하기' : '로그인 필요', !loggedIn);
   } else {
     setUpdateAttention(false);
     els.updateStatus.textContent = result.source === 'remote' ? '최신 manifest 확인 완료' : `로컬 manifest 사용 중 (${result.source})`;
-    setPlayState(loggedIn ? '입장하기' : '로그인 필요', !loggedIn);
+    setPlayState(loggedIn ? '실행하기' : '로그인 필요', !loggedIn);
   }
 }
 
-async function refreshServerStatus() {
-  els.serverMotd.textContent = '서버 확인 중';
+async function refreshServerStatus({ silent = false } = {}) {
+  if (serverStatusInFlight) return;
+  serverStatusInFlight = true;
+  if (!silent) els.serverMotd.textContent = '서버 확인 중';
   try {
     const status = await window.launcher.getServerStatus();
     const online = Boolean(status.online);
@@ -210,7 +238,35 @@ async function refreshServerStatus() {
     els.serverSample.textContent = sample.length > 0 ? sample.join(', ') : '접속자 목록은 서버 API 연결 후 표시됩니다.';
   } catch {
     els.serverMotd.textContent = '확인 실패';
+  } finally {
+    serverStatusInFlight = false;
   }
+}
+
+function shouldPollServerStatus() {
+  return document.visibilityState === 'visible' || document.hasFocus();
+}
+
+function stopServerStatusPolling() {
+  if (!serverStatusTimer) return;
+  clearInterval(serverStatusTimer);
+  serverStatusTimer = null;
+}
+
+function startServerStatusPolling() {
+  if (!shouldPollServerStatus()) {
+    stopServerStatusPolling();
+    return;
+  }
+  if (!serverStatusTimer) {
+    serverStatusTimer = setInterval(() => refreshServerStatus({ silent: true }), 3000);
+  }
+  refreshServerStatus({ silent: true });
+}
+
+function updateServerStatusPolling() {
+  if (shouldPollServerStatus()) startServerStatusPolling();
+  else stopServerStatusPolling();
 }
 
 function renderOfficialList(category) {
@@ -274,20 +330,24 @@ function setProfile(name, uuid) {
   els.playerName.textContent = name;
   els.avatar.src = `https://mc-heads.net/avatar/${uuid}/32`;
   showView('main');
-  setPlayState(launcherUpdateRequired ? '런처 업데이트 필요' : '입장하기');
+  setPlayState(launcherUpdateRequired ? '런처 업데이트 필요' : '실행하기');
 }
 
 async function runSetupOnly() {
+  setSetupVisible(true);
   setPlayState('파일 확인 중', true);
+  els.setupText.textContent = '공식 파일 확인 중';
   els.setupBar.style.width = '0%';
   const result = await window.launcher.runSetup();
   if (!result.success) {
     showToast(result.error || '파일 검증 실패', 'error');
+    els.setupText.textContent = result.error || '파일 검증 실패';
     setPlayState('오류 발생', true);
     return false;
   }
   applyManifest(result.manifest);
-  setPlayState('입장하기');
+  markSetupReady();
+  setPlayState('실행하기');
   return true;
 }
 
@@ -361,7 +421,7 @@ window.launcher.onDownloadStatus(event => {
 window.launcher.onGameClosed(code => {
   launching = false;
   els.progressSection.classList.remove('visible');
-  setPlayState('입장하기');
+  setPlayState('실행하기');
   if (code === 0) showToast('게임이 종료되었습니다.', 'success');
   else showToast(`게임이 종료되었습니다. 코드: ${code}`, 'error');
 });
@@ -576,15 +636,33 @@ document.querySelectorAll('.nav-btn').forEach(button => {
   button.addEventListener('click', () => showPage(button.dataset.view));
 });
 
+async function copyServerAddress() {
+  const address = els.serverAddress?.textContent?.trim() || 'online.zzapcho.kr';
+  await navigator.clipboard.writeText(address);
+  showToast('서버 주소를 복사했습니다.', 'success');
+}
+
+els.serverAddress?.addEventListener('click', copyServerAddress);
+els.serverAddress?.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  copyServerAddress();
+});
+
+document.addEventListener('visibilitychange', updateServerStatusPolling);
+window.addEventListener('focus', updateServerStatusPolling);
+window.addEventListener('blur', updateServerStatusPolling);
+
 document.getElementById('btn-minimize').addEventListener('click', () => window.launcher.minimize());
 document.getElementById('btn-close').addEventListener('click', () => window.launcher.close());
 
 async function init() {
+  refreshServerStatus();
+  updateServerStatusPolling();
+
   await refreshProfile();
   await loadSettings();
   await checkManifestUpdate();
-  await refreshServerStatus();
-  setInterval(refreshServerStatus, 30000);
 
   const auth = await window.launcher.checkAuth();
   if (auth.loggedIn) {

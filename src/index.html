@@ -25,7 +25,7 @@
         <p>zzapcho Online</p>
       </div>
       <button class="btn btn-primary btn-login" id="btn-login">Microsoft 계정으로 로그인</button>
-      <p class="login-hint">online.zzapcho.kr</p>
+      <p class="login-hint" id="login-server-address">online.zzapcho.kr</p>
     </div>
   </div>
 
@@ -59,13 +59,13 @@
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 105.29 3.17l-1.12.58A4.75 4.75 0 118 3.25V1l3 3-3 3V4.5a3.5 3.5 0 103.1 1.88l1.12-.58A4.75 4.75 0 118 3.25V2z"/></svg>
           업데이트
         </button>
-        <button class="nav-btn" data-view="settings">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 10a2 2 0 100-4 2 2 0 000 4zm6.32-1.906l-1.146-.964a5.44 5.44 0 000-1.26l1.146-.964a.29.29 0 00.07-.37l-1.09-1.89a.29.29 0 00-.35-.13l-1.35.543a5.1 5.1 0 00-1.09-.63L10.36.97a.28.28 0 00-.28-.24H7.92a.28.28 0 00-.28.24l-.15 1.49a5.1 5.1 0 00-1.09.63L5.05 2.56a.28.28 0 00-.35.13L3.61 4.58a.28.28 0 00.07.37l1.146.964a5.44 5.44 0 000 1.26L3.68 8.134a.29.29 0 00-.07.37l1.09 1.89a.29.29 0 00.35.13l1.35-.543a5.1 5.1 0 001.09.63l.15 1.49a.28.28 0 00.28.24h2.16a.28.28 0 00.28-.24l.15-1.49a5.1 5.1 0 001.09-.63l1.35.543a.28.28 0 00.35-.13l1.09-1.89a.29.29 0 00-.07-.37z"/></svg>
-          설정
-        </button>
         <button class="nav-btn" data-view="logs">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v1H2V2zm0 3h12v1H2V5zm0 3h8v1H2V8zm0 3h6v1H2v-1z"/></svg>
           로그
+        </button>
+        <button class="nav-btn" data-view="settings">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 10a2 2 0 100-4 2 2 0 000 4zm6.32-1.906l-1.146-.964a5.44 5.44 0 000-1.26l1.146-.964a.29.29 0 00.07-.37l-1.09-1.89a.29.29 0 00-.35-.13l-1.35.543a5.1 5.1 0 00-1.09-.63L10.36.97a.28.28 0 00-.28-.24H7.92a.28.28 0 00-.28.24l-.15 1.49a5.1 5.1 0 00-1.09.63L5.05 2.56a.28.28 0 00-.35.13L3.61 4.58a.28.28 0 00.07.37l1.146.964a5.44 5.44 0 000 1.26L3.68 8.134a.29.29 0 00-.07.37l1.09 1.89a.29.29 0 00.35.13l1.35-.543a5.1 5.1 0 001.09.63l.15 1.49a.28.28 0 00.28.24h2.16a.28.28 0 00.28-.24l.15-1.49a5.1 5.1 0 001.09-.63l1.35.543a.28.28 0 00.35-.13l1.09-1.89a.29.29 0 00-.07-.37z"/></svg>
+          설정
         </button>
         <button class="nav-btn" data-view="about">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 110 14A7 7 0 018 1zm0 3.25a.75.75 0 100 1.5.75.75 0 000-1.5zM7.25 7v5h1.5V7h-1.5z"/></svg>
@@ -115,7 +115,7 @@
             <div class="server-card" id="server-card">
               <span class="server-dot offline" id="server-dot"></span>
               <div class="server-main">
-                <span class="server-card-name">online.zzapcho.kr</span>
+                <span class="server-card-name server-address" id="server-address" role="button" tabindex="0" title="서버 주소 복사">online.zzapcho.kr</span>
                 <span class="server-motd" id="server-motd">서버 확인 중</span>
               </div>
               <span class="server-players" id="server-players">-</span>

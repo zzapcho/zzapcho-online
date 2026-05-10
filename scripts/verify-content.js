@@ -30,7 +30,8 @@ function main() {
     assert(manifest.profileId === profile.profileId, 'manifest.profileId가 profile과 다릅니다.');
     assert(manifest.displayName === profile.displayName, 'manifest.displayName이 profile과 다릅니다.');
     assert(manifest.manifestVersion === profile.manifestVersion, 'manifestVersion이 profile과 다릅니다.');
-    assert(manifest.server?.host === 'online.zzapcho.kr', 'server.host가 online.zzapcho.kr이 아닙니다.');
+    assert(manifest.server?.host === profile.server.host, 'manifest.server.host가 profile과 다릅니다.');
+    assert(manifest.server?.port === profile.server.port, 'manifest.server.port가 profile과 다릅니다.');
     assert(Number.isInteger(manifest.server?.port), 'server.port는 정수여야 합니다.');
     assert(manifest.server.port >= 1 && manifest.server.port <= 65535, 'server.port 범위가 올바르지 않습니다.');
     assert(manifest.minecraft?.version === profile.minecraft.version, 'minecraft.version이 profile과 다릅니다.');

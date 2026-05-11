@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "profileId": "zzapcho-online-main",
+  "displayName": "잡초 약탈서버",
+  "manifestVersion": "2026.05.10-003",
+  "server": {
+    "host": "online.zzapcho.kr",
+    "port": 25565
+  },
+  "minecraft": {
+    "version": "26.1.2",
+    "loader": "fabric",
+    "loaderVersion": "0.19.2",
+    "javaVersion": 25
+  },
+  "launcher": {
+    "minimumVersion": "1.0.0",
+    "latestVersion": "1.2.4"
+  },
+  "sync": {
+    "deleteUnknownFiles": false,
+    "quarantineUnknownFiles": true,
+    "protectedDirectories": [
+      "mods",
+      "resourcepacks"
+    ]
+  },
+  "files": [
+    {
+      "path": "mods/BetterAdvancements-Fabric-26.1.2-0.5.0.58.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/BetterAdvancements-Fabric-26.1.2-0.5.0.58.jar",
+      "sha256": "192829bf0488d69a79e0de958e1701f997aa342a2a08684c7a268a487d8ae5ea",
+      "size": 102705,
+      "required": true
+    },
+    {
+      "path": "mods/chat_heads-1.2.2-fabric-26.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/chat_heads-1.2.2-fabric-26.1.jar",
+      "sha256": "c8827bcfec341feaef3ab31998093fe56b1b07648e17e2afa5e085eab3275a72",
+      "size": 90861,
+      "required": true
+    },
+    {
+      "path": "mods/cloth-config-26.1.154.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/cloth-config-26.1.154.jar",
+      "sha256": "fb7a5d869ce10eaac2c2fe9ab84b4fc011a1fbfa575a93be9845a386a7f0c7d3",
+      "size": 1135373,
+      "required": true
+    },
+    {
+      "path": "mods/Essential_1-3-10-8_fabric_26-1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/Essential_1-3-10-8_fabric_26-1.jar",
+      "sha256": "21bd2a27bae910ceed343a455f1e30ea671626493c8f0319e898b6b79b90bb06",
+      "size": 52245634,
+      "required": true
+    },
+    {
+      "path": "mods/fabric-api-0.147.0+26.1.2.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/fabric-api-0.147.0%2B26.1.2.jar",
+      "sha256": "ab7877a8f7c8e47570d3eb7104b2fb2f3a324f6d655356fe73967f2d3290bab8",
+      "size": 2415446,
+      "required": true
+    },
+    {
+      "path": "mods/Gamma-Utils-3.0.0+mc26.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/Gamma-Utils-3.0.0%2Bmc26.1.jar",
+      "sha256": "57698fc75efef26a47b996b44f3d4fe5656075bb7d125146b83bc2bf00c92c0f",
+      "size": 103258,
+      "required": true
+    },
+    {
+      "path": "mods/iris-fabric-1.10.9+mc26.1.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/iris-fabric-1.10.9%2Bmc26.1.1.jar",
+      "sha256": "aea0eefb174d19ad97a812b6de2e304f0d3abc50357b316908cf1035f1514b07",
+      "size": 2803860,
+      "required": true
+    },
+    {
+      "path": "mods/koreanify-fabric-0.1.4+mc26.1.2.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/koreanify-fabric-0.1.4%2Bmc26.1.2.jar",
+      "sha256": "d4b9d46fb85a7ea096de22c371fee4c4f1a909da89f34ae52a3fe228d4baacfa",
+      "size": 53124,
+      "required": true
+    },
+    {
+      "path": "mods/modmenu-18.0.0-alpha.8.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/modmenu-18.0.0-alpha.8.jar",
+      "sha256": "bb482d08e5409cdc721dcb25a3ecbd97f8c21ac15bf94fd8f2ca225229616430",
+      "size": 847389,
+      "required": true
+    },
+    {
+      "path": "mods/MouseTweaks-fabric-mc26.1-2.31.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/MouseTweaks-fabric-mc26.1-2.31.jar",
+      "sha256": "56cabaa265034772de4e52d9a26d933a01bbab0f0a9de2ee47916a2ab9f2b660",
+      "size": 75833,
+      "required": true
+    },
+    {
+      "path": "mods/reeses-sodium-options-fabric-2.0.5+mc26.1.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/reeses-sodium-options-fabric-2.0.5%2Bmc26.1.1.jar",
+      "sha256": "432f60df294ff2bf6b0debeb9750115c7d27ecb548d917e6ca7e31fd40cc83b9",
+      "size": 103481,
+      "required": true
+    },
+    {
+      "path": "mods/shulkerboxtooltip-fabric-5.2.18+26.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/shulkerboxtooltip-fabric-5.2.18%2B26.1.jar",
+      "sha256": "64ac275bb8f554a1eac2c82bf674a794178d1229ddcd3afbff4d3a9300c2b1d3",
+      "size": 388301,
+      "required": true
+    },
+    {
+      "path": "mods/sodium-extra-fabric-0.8.7+mc26.1.1.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/sodium-extra-fabric-0.8.7%2Bmc26.1.1.jar",
+      "sha256": "ba7787879e9154a1d8aa2b9c1e64b718816bd133f80c11242f424d566815211c",
+      "size": 401602,
+      "required": true
+    },
+    {
+      "path": "mods/sodium-fabric-0.8.11+mc26.1.2.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/sodium-fabric-0.8.11%2Bmc26.1.2.jar",
+      "sha256": "ee1fb79d388441d11fcca08ea16ace361bceb5c5db57d45f683698f9c9029a1f",
+      "size": 1833351,
+      "required": true
+    },
+    {
+      "path": "mods/voicechat-fabric-2.6.17+26.1.2.jar",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/mods/voicechat-fabric-2.6.17%2B26.1.2.jar",
+      "sha256": "9644cc302e104e1afe748ce942661f8a5b2ffe4e8f7b012d30c4d93aa63912cc",
+      "size": 5509570,
+      "required": true
+    },
+    {
+      "path": "resourcepacks/잡초리소스팩.zip",
+      "url": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/client/resourcepacks/%EC%9E%A1%EC%B4%88%EB%A6%AC%EC%86%8C%EC%8A%A4%ED%8C%A9.zip",
+      "sha256": "74b93efb8a7c9d18f4982387ceebaa067090951d21671972da3607bd131d6c45",
+      "size": 1842606,
+      "required": true
+    }
+  ]
+}

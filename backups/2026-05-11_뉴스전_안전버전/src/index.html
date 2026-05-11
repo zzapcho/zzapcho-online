@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://mc-heads.net; style-src 'self' 'unsafe-inline';">
+  <title>잡초 약탈서버 런처</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-title">잡초 약탈서버 런처</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize" aria-label="최소화">─</button>
+      <button class="titlebar-btn titlebar-close" id="btn-close" aria-label="닫기">×</button>
+    </div>
+  </div>
+
+  <div id="view-login" class="view active">
+    <div class="login-content">
+      <div class="logo">
+        <h1>잡초 약탈서버</h1>
+        <p>zzapcho Online</p>
+      </div>
+      <button class="btn btn-primary btn-login" id="btn-login">Microsoft 계정으로 로그인</button>
+      <p class="login-hint" id="login-server-address">online.zzapcho.kr</p>
+    </div>
+  </div>
+
+  <div id="view-main" class="view">
+    <aside class="sidebar">
+      <div class="profile">
+        <img class="avatar" id="player-avatar" src="" alt="avatar">
+        <span class="player-name" id="player-name">Player</span>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-btn active" data-view="home">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1L1 6.5V15h4.5v-4h5v4H15V6.5L8 1z"/></svg>
+          홈
+        </button>
+        <button class="nav-btn" data-view="mods">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M13 2h-2V1a1 1 0 00-2 0v1H7V1a1 1 0 00-2 0v1H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V3a1 1 0 00-1-1zm-1 10H4V4h1v1a1 1 0 002 0V4h2v1a1 1 0 002 0V4h1v8z"/></svg>
+          모드
+        </button>
+        <button class="nav-btn" data-view="resourcepacks">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3a1 1 0 011-1h12a1 1 0 011 1v10a1 1 0 01-1 1H2a1 1 0 01-1-1V3zm2 1v8h10V4H3zm2 2h6v1H5V6zm0 2h4v1H5V8z"/></svg>
+          리소스팩
+        </button>
+        <button class="nav-btn" data-view="shaderpacks">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zM3.5 8a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0z"/></svg>
+          셰이더
+        </button>
+        <div class="nav-sep"></div>
+
+        <button class="nav-btn" id="nav-updates" data-view="updates">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 105.29 3.17l-1.12.58A4.75 4.75 0 118 3.25V1l3 3-3 3V4.5a3.5 3.5 0 103.1 1.88l1.12-.58A4.75 4.75 0 118 3.25V2z"/></svg>
+          업데이트
+        </button>
+        <button class="nav-btn" data-view="logs">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v1H2V2zm0 3h12v1H2V5zm0 3h8v1H2V8zm0 3h6v1H2v-1z"/></svg>
+          로그
+        </button>
+        <button class="nav-btn" data-view="settings">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 10a2 2 0 100-4 2 2 0 000 4zm6.32-1.906l-1.146-.964a5.44 5.44 0 000-1.26l1.146-.964a.29.29 0 00.07-.37l-1.09-1.89a.29.29 0 00-.35-.13l-1.35.543a5.1 5.1 0 00-1.09-.63L10.36.97a.28.28 0 00-.28-.24H7.92a.28.28 0 00-.28.24l-.15 1.49a5.1 5.1 0 00-1.09.63L5.05 2.56a.28.28 0 00-.35.13L3.61 4.58a.28.28 0 00.07.37l1.146.964a5.44 5.44 0 000 1.26L3.68 8.134a.29.29 0 00-.07.37l1.09 1.89a.29.29 0 00.35.13l1.35-.543a5.1 5.1 0 001.09.63l.15 1.49a.28.28 0 00.28.24h2.16a.28.28 0 00.28-.24l.15-1.49a5.1 5.1 0 001.09-.63l1.35.543a.28.28 0 00.35-.13l1.09-1.89a.29.29 0 00-.07-.37z"/></svg>
+          설정
+        </button>
+        <button class="nav-btn" data-view="about">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 110 14A7 7 0 018 1zm0 3.25a.75.75 0 100 1.5.75.75 0 000-1.5zM7.25 7v5h1.5V7h-1.5z"/></svg>
+          정보
+        </button>
+      </nav>
+
+      <button class="btn btn-text btn-logout" id="btn-logout">로그아웃</button>
+    </aside>
+
+    <main class="content">
+      <section id="page-home" class="page active">
+        <div class="play-section">
+          <div class="server-title">
+            <h2>잡초 약탈서버</h2>
+          </div>
+
+          <div class="version-badge">
+            <span>Minecraft</span>
+            <span class="version" id="game-version">1.21.4</span>
+            <span class="modloader-badge" id="modloader-badge">Fabric</span>
+          </div>
+
+          <div class="setup-box" id="setup-box">
+            <div class="setup-row">
+              <span class="update-spinner"></span>
+              <span class="setup-text" id="setup-text">공식 파일 확인 대기 중</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="setup-bar"></div>
+            </div>
+          </div>
+
+          <button class="btn btn-play" id="btn-play" disabled>
+            <span class="play-icon">▶</span>
+            <span id="play-label">로그인 필요</span>
+          </button>
+
+          <div class="progress-section" id="progress-section">
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="progress-text" id="progress-text">준비 중...</p>
+          </div>
+
+          <div class="server-status-wrap" id="server-status-wrap">
+            <div class="server-card" id="server-card">
+              <span class="server-dot offline" id="server-dot"></span>
+              <div class="server-main">
+                <span class="server-card-name server-address" id="server-address" role="button" tabindex="0" title="서버 주소 복사">online.zzapcho.kr</span>
+                <span class="server-motd" id="server-motd">서버 확인 중</span>
+              </div>
+              <span class="server-players" id="server-players">-</span>
+            </div>
+            <div class="server-detail-grid">
+              <span>버전 <b id="server-version">-</b></span>
+              <span>ping <b id="server-ping">-</b></span>
+            </div>
+            <div class="player-sample" id="server-sample">접속자 목록은 서버 API 연결 후 표시됩니다.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-mods" class="page">
+        <div class="page-header"><h2>공식 모드</h2><span class="readonly-pill">GitHub 관리</span></div>
+        <div class="file-section">
+          <div class="file-section-label">content/client/mods</div>
+          <div class="file-list" id="server-mods"></div>
+        </div>
+      </section>
+
+      <section id="page-resourcepacks" class="page">
+        <div class="page-header"><h2>공식 리소스팩</h2><span class="readonly-pill">GitHub 관리</span></div>
+        <div class="file-section">
+          <div class="file-section-label">content/client/resourcepacks</div>
+          <div class="file-list" id="server-resourcepacks"></div>
+        </div>
+      </section>
+
+      <section id="page-shaderpacks" class="page">
+        <div class="page-header">
+          <h2>셰이더</h2>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btn-shader-modrinth">Modrinth</button>
+            <button class="btn btn-primary" id="btn-add-shader">파일 추가</button>
+          </div>
+        </div>
+        <div class="drop-zone" id="shader-drop-zone">
+          <div class="drop-zone-text">.zip / .jar 셰이더 파일을 여기에 드래그하세요</div>
+        </div>
+        <div class="shader-search" id="shader-search-panel" style="display:none;">
+          <div class="shader-search-row">
+            <input class="input" id="shader-search-input" placeholder="셰이더 검색">
+            <button class="btn btn-primary" id="btn-shader-search">검색</button>
+          </div>
+          <div class="shader-results" id="shader-results"></div>
+        </div>
+        <div class="file-section">
+          <div class="file-section-label">내 셰이더</div>
+          <div class="file-list" id="user-shaderpacks"></div>
+        </div>
+      </section>
+
+      <section id="page-updates" class="page">
+        <h2>업데이트</h2>
+        <div class="settings-section">
+          <div class="settings-section-title">런처</div>
+          <div class="info-grid">
+            <span>현재 런처 버전</span><b id="current-launcher-version">-</b>
+            <span>최신 런처 버전</span><b id="latest-launcher-version">-</b>
+            <span>manifest</span><b id="manifest-version">-</b>
+            <span>상태</span><b id="update-status">업데이트 확인 중</b>
+          </div>
+          <div class="progress-bar update-bar">
+            <div class="progress-fill" id="update-progress-fill"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-restart-update" disabled>재시작하여 업데이트</button>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <h2>설정</h2>
+        <div class="settings-section">
+          <div class="settings-section-title">게임</div>
+          <div class="settings-group">
+            <label>최소 RAM</label>
+            <div class="slider-row">
+              <input type="range" id="setting-ram-min" min="1" max="8" value="2" class="slider">
+              <span class="slider-value" id="ram-min-value">2</span><span class="unit">GB</span>
+            </div>
+          </div>
+          <div class="settings-group">
+            <label>최대 RAM</label>
+            <div class="slider-row">
+              <input type="range" id="setting-ram-max" min="2" max="16" value="4" class="slider">
+              <span class="slider-value" id="ram-max-value">4</span><span class="unit">GB</span>
+            </div>
+          </div>
+          <div class="settings-group">
+            <label>해상도</label>
+            <div class="resolution-row">
+              <input type="number" id="setting-width" value="1280" class="input input-small">
+              <span class="resolution-x">&times;</span>
+              <input type="number" id="setting-height" value="720" class="input input-small">
+            </div>
+          </div>
+          <div class="settings-group">
+            <label>Java 경로 <span class="hint">(비워두면 자동 감지)</span></label>
+            <input type="text" id="setting-java" placeholder="javaw" class="input">
+          </div>
+          <div class="settings-group">
+            <label>게임 폴더</label>
+            <button class="btn btn-outline" id="btn-open-game-folder">폴더 열기</button>
+          </div>
+          <p class="readonly-note">서버 주소와 공식 파일은 런처에서 수정할 수 없습니다.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-save-settings">저장</button>
+        <div class="launcher-version" id="launcher-version"></div>
+      </section>
+
+      <section id="page-logs" class="page">
+        <div class="log-header">
+          <div>
+            <h2>로그</h2>
+            <p class="log-subtitle">실행 로그와 런처 기록을 확인합니다.</p>
+          </div>
+          <div class="log-toolbar">
+            <select class="input input-small" id="log-type">
+              <option value="launcher">런처</option>
+              <option value="game" selected>게임</option>
+              <option value="crash">크래시</option>
+              <option value="update">업데이트</option>
+            </select>
+            <input class="input log-search" id="log-query" placeholder="검색">
+            <button class="btn btn-outline" id="btn-refresh-log">새로고침</button>
+            <button class="btn btn-danger" id="btn-stop-game" disabled>게임 강제 종료</button>
+            <button class="btn btn-outline" id="btn-copy-log">복사</button>
+            <button class="btn btn-outline" id="btn-open-logs">로그 폴더</button>
+          </div>
+        </div>
+        <pre class="log-body" id="log-body"></pre>
+      </section>
+
+      <section id="page-about" class="page">
+        <h2>정보</h2>
+        <div class="settings-section">
+          <div class="settings-section-title">Zzapcho Online</div>
+          <div class="info-grid">
+            <span>앱</span><b>잡초 약탈서버 런처</b>
+            <span>버전</span><b id="about-version">-</b>
+            <span>profile</span><b id="about-profile">zzapcho-online-main</b>
+            <span>manifest URL</span><b id="about-manifest-url">-</b>
+          </div>
+          <p class="readonly-note">런처는 GitHub manifest에 등록된 공식 파일만 사용합니다. 전체 PC는 검사하지 않고 zzapchoOnline 게임 폴더의 보호 폴더만 확인합니다.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "name": "zzapcho-online",
+  "version": "1.2.4",
+  "description": "잡초 약탈서버 전용 Minecraft 런처",
+  "productName": "잡초 약탈서버 런처",
+  "author": "zzapcho",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --publish never",
+    "build:dir": "electron-builder --win --dir",
+    "manifest": "node scripts/generate-manifest.js",
+    "content:verify": "node scripts/verify-content.js",
+    "content:summary": "node scripts/print-content-summary.js"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3",
+    "minecraft-launcher-core": "^3.18.2",
+    "msmc": "^5.0.5"
+  },
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2"
+  },
+  "build": {
+    "appId": "com.zzapcho.online",
+    "productName": "잡초 약탈서버 런처",
+    "directories": {
+      "output": "dist"
+    },
+    "artifactName": "ZzapchoOnline-Setup-${version}.${ext}",
+    "afterPack": "scripts/after-pack.js",
+    "win": {
+      "executableName": "ZzapchoOnline",
+      "icon": "build/favicon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "잡초 약탈서버 런처",
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/favicon.ico",
+      "uninstallerIcon": "build/favicon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "zzapcho",
+      "repo": "zzapcho-online"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/favicon.ico",
+      "launcher.config.json",
+      "content/profile.json",
+      "content/manifest.json",
+      "src/**/*",
+      "lib/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/favicon.ico",
+        "to": "build/favicon.ico"
+      }
+    ]
+  }
+}

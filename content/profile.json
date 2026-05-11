@@ -15,7 +15,7 @@
   },
   "launcher": {
     "minimumVersion": "1.0.0",
-    "latestVersion": "1.2.4"
+    "latestVersion": "1.2.5"
   },
   "sync": {
     "deleteUnknownFiles": false,

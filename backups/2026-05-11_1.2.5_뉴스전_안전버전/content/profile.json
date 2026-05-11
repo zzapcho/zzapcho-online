@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "profileId": "zzapcho-online-main",
+  "displayName": "잡초 약탈서버",
+  "manifestVersion": "2026.05.10-003",
+  "server": {
+    "host": "online.zzapcho.kr",
+    "port": 25565
+  },
+  "minecraft": {
+    "version": "26.1.2",
+    "loader": "fabric",
+    "loaderVersion": "0.19.2",
+    "javaVersion": 25
+  },
+  "launcher": {
+    "minimumVersion": "1.0.0",
+    "latestVersion": "1.2.5"
+  },
+  "sync": {
+    "deleteUnknownFiles": false,
+    "quarantineUnknownFiles": true,
+    "protectedDirectories": [
+      "mods",
+      "resourcepacks"
+    ]
+  }
+}

@@ -57,6 +57,8 @@ const els = {
   settingWidth: document.getElementById('setting-width'),
   settingHeight: document.getElementById('setting-height'),
   settingJava: document.getElementById('setting-java'),
+  scanJavaBtn: document.getElementById('btn-scan-java'),
+  javaRuntimeMenu: document.getElementById('java-runtime-menu'),
   aboutVersion: document.getElementById('about-version'),
   aboutProfile: document.getElementById('about-profile'),
   aboutManifestUrl: document.getElementById('about-manifest-url'),
@@ -544,6 +546,77 @@ function syncRamLabels() {
 
 els.settingRamMin.addEventListener('input', syncRamLabels);
 els.settingRamMax.addEventListener('input', syncRamLabels);
+
+function closeJavaRuntimeMenu() {
+  els.javaRuntimeMenu.classList.remove('open');
+}
+
+function renderJavaRuntimeMenu(result) {
+  const runtimes = result.runtimes || [];
+  els.javaRuntimeMenu.innerHTML = '';
+  if (!runtimes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'java-runtime-empty';
+    empty.textContent = `Java ${result.requiredMajor || ''} 이상을 찾지 못했습니다. 비워두면 실행 시 자동 설치됩니다.`;
+    els.javaRuntimeMenu.appendChild(empty);
+    els.javaRuntimeMenu.classList.add('open');
+    return;
+  }
+
+  for (const runtime of runtimes) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'java-runtime-option';
+
+    const title = document.createElement('div');
+    title.className = 'java-runtime-title';
+    const name = document.createElement('span');
+    name.textContent = `${runtime.source || 'Java'} ${runtime.version}`;
+    const vendor = document.createElement('span');
+    vendor.textContent = runtime.vendor || '';
+    title.append(name, vendor);
+
+    const runtimePath = document.createElement('div');
+    runtimePath.className = 'java-runtime-path';
+    runtimePath.textContent = runtime.path;
+
+    button.append(title, runtimePath);
+    button.addEventListener('click', () => {
+      els.settingJava.value = runtime.path;
+      closeJavaRuntimeMenu();
+    });
+    els.javaRuntimeMenu.appendChild(button);
+  }
+  els.javaRuntimeMenu.classList.add('open');
+}
+
+els.scanJavaBtn.addEventListener('click', async event => {
+  event.stopPropagation();
+  if (els.javaRuntimeMenu.classList.contains('open')) {
+    closeJavaRuntimeMenu();
+    return;
+  }
+
+  els.scanJavaBtn.disabled = true;
+  const previousText = els.scanJavaBtn.textContent;
+  els.scanJavaBtn.textContent = '...';
+  try {
+    const result = await window.launcher.scanJava();
+    if (!result.success) throw new Error(result.error || 'Java 스캔 실패');
+    renderJavaRuntimeMenu(result);
+  } catch (error) {
+    showToast(error.message || 'Java 스캔 실패', 'error');
+  } finally {
+    els.scanJavaBtn.disabled = false;
+    els.scanJavaBtn.textContent = previousText;
+  }
+});
+
+document.addEventListener('click', event => {
+  if (!els.javaRuntimeMenu.classList.contains('open')) return;
+  if (els.javaRuntimeMenu.contains(event.target) || els.scanJavaBtn.contains(event.target)) return;
+  closeJavaRuntimeMenu();
+});
 
 async function loadSettings() {
   const settings = await window.launcher.getSettings();

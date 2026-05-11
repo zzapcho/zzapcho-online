@@ -214,7 +214,11 @@
           </div>
           <div class="settings-group">
             <label>Java 경로 <span class="hint">(비워두면 자동 감지)</span></label>
-            <input type="text" id="setting-java" placeholder="javaw" class="input">
+            <div class="java-path-row">
+              <input type="text" id="setting-java" placeholder="javaw" class="input java-path-input">
+              <button class="icon-btn java-menu-btn" id="btn-scan-java" title="Java 목록" aria-label="Java 목록">☰</button>
+            </div>
+            <div class="java-runtime-menu" id="java-runtime-menu"></div>
           </div>
           <div class="settings-group">
             <label>게임 폴더</label>

@@ -23,6 +23,7 @@
 - 런처는 `mods`, `resourcepacks`만 공식 manifest 기준으로 검증합니다.
 - manifest에 없는 보호 폴더 파일은 quarantine으로 이동합니다.
 - 전체 PC 검사는 하지 않습니다.
+- GitHub에는 관리자가 명시적으로 올리라고 요청했을 때만 commit/push합니다.
 
 ## 주요 폴더
 

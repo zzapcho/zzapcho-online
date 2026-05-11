@@ -542,6 +542,31 @@ function sendSetupProgress(message, percent = -1, options = {}) {
   mainWindow?.webContents.send('setup:progress', { message, percent });
 }
 
+async function ensureJavaRuntime(settings, progressRange = { start: 10, end: 30 }, minecraft = {}) {
+  const { detectJava, downloadJava, getRequiredJavaMajor } = require('./lib/java');
+  const currentSettings = settings || readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const start = progressRange.start ?? 10;
+  const end = progressRange.end ?? 30;
+  const requiredMajor = getRequiredJavaMajor(minecraft);
+
+  sendSetupProgress(`Java ${requiredMajor} 실행 환경 확인 중`, start);
+  let javaPath = detectJava(DATA_PATH, currentSettings.javaPath, requiredMajor);
+  if (!javaPath) {
+    sendSetupProgress(`Java ${requiredMajor}가 없어 자동 설치 중`, start + 2, { force: true });
+    javaPath = await downloadJava(DATA_PATH, (message, current, total) => {
+      const percent = total > 0
+        ? Math.round(start + ((current / total) * (end - start)))
+        : start + 5;
+      sendSetupProgress(message, percent);
+    }, requiredMajor);
+  }
+
+  if (currentSettings.javaPath !== javaPath) {
+    writeJson(SETTINGS_FILE, { ...currentSettings, javaPath });
+  }
+  return javaPath;
+}
+
 function listProtectedFiles() {
   const out = [];
   const walk = dir => {
@@ -715,18 +740,8 @@ ipcMain.handle('setup:run', async () => {
       throw new Error(`런처 업데이트가 필요합니다. 최소 버전: ${minimum}`);
     }
 
-    sendSetupProgress('Java 실행 환경 확인 중', 10);
-    const { detectJava, downloadJava } = require('./lib/java');
     const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
-    let javaPath = detectJava(DATA_PATH, settings.javaPath);
-    if (!javaPath) {
-      sendSetupProgress('Java가 없어 자동 설치 중', 12);
-      javaPath = await downloadJava(DATA_PATH, (message, current, total) => {
-        const percent = total > 0 ? Math.round(12 + (current / total) * 18) : 15;
-        sendSetupProgress(message, percent);
-      });
-    }
-    writeJson(SETTINGS_FILE, { ...settings, javaPath });
+    const javaPath = await ensureJavaRuntime(settings, { start: 10, end: 30 }, manifest.minecraft);
 
     const modloader = require('./lib/modloader');
     const gameVersion = manifest.minecraft.version;
@@ -775,6 +790,7 @@ ipcMain.handle('game:launch', async () => {
     const settings = readJson(SETTINGS_FILE, DEFAULT_SETTINGS);
     const manifest = lastManifest || readJson(MANIFEST_CACHE, null);
     if (!manifest) throw new Error('manifest가 준비되지 않았습니다.');
+    const javaPath = await ensureJavaRuntime(settings, { start: 5, end: 25 }, manifest.minecraft);
 
     const modloader = require('./lib/modloader');
     const loader = manifest.minecraft.loader;
@@ -798,7 +814,7 @@ ipcMain.handle('game:launch', async () => {
       },
       overrides: { gameDirectory: GAME_PATH }
     };
-    if (settings.javaPath) opts.javaPath = settings.javaPath;
+    opts.javaPath = javaPath;
 
     logLine('launcher', `game launch: ${gameVersion} ${loader}/${loaderVersion}`);
     const sendGameProgress = createThrottledWindowSender('game:progress');
@@ -1301,6 +1317,16 @@ ipcMain.handle('support:create-zip', async () => {
 });
 
 ipcMain.handle('settings:get', () => ({ ...DEFAULT_SETTINGS, ...readJson(SETTINGS_FILE, {}) }));
+ipcMain.handle('settings:scan-java', () => {
+  const manifest = lastManifest || readJson(MANIFEST_CACHE, null) || readJson(BUNDLED_MANIFEST, null);
+  const { getRequiredJavaMajor, scanJavaRuntimes } = require('./lib/java');
+  const requiredMajor = getRequiredJavaMajor(manifest?.minecraft || {});
+  return {
+    success: true,
+    requiredMajor,
+    runtimes: scanJavaRuntimes(DATA_PATH, requiredMajor)
+  };
+});
 ipcMain.handle('settings:set', (_, nextSettings) => {
   const existing = readJson(SETTINGS_FILE, {});
   const safe = {

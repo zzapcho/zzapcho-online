@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('launcher', {
   createSupportZip: () => ipcRenderer.invoke('support:create-zip'),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  scanJava: () => ipcRenderer.invoke('settings:scan-java'),
   setSettings: settings => ipcRenderer.invoke('settings:set', settings),
   getVersion: () => ipcRenderer.invoke('app:version'),
 

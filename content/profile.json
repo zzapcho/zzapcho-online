@@ -10,7 +10,8 @@
   "minecraft": {
     "version": "26.1.2",
     "loader": "fabric",
-    "loaderVersion": "0.19.2"
+    "loaderVersion": "0.19.2",
+    "javaVersion": 25
   },
   "launcher": {
     "minimumVersion": "1.0.0",

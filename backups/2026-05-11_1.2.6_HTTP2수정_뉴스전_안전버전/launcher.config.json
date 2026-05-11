@@ -1,0 +1,12 @@
+{
+  "profile": {
+    "id": "zzapcho-online-main",
+    "name": "잡초 약탈서버",
+    "server": {
+      "host": "online.zzapcho.kr",
+      "port": 25565
+    },
+    "manifestUrl": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/manifest.json",
+    "profileUrl": "https://raw.githubusercontent.com/zzapcho/zzapcho-online/main/content/profile.json"
+  }
+}

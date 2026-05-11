@@ -1,0 +1,43 @@
+name: Verify Content
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "content/profile.json"
+      - "content/client/mods/**"
+      - "content/client/resourcepacks/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  verify-content:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run manifest
+      - run: npm run content:verify
+      - run: npm run content:summary
+      - name: Commit generated manifest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          if ! git diff --quiet -- content/manifest.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add content/manifest.json
+            git commit -m "Update content manifest [skip ci]"
+            git push
+          fi

@@ -45,6 +45,8 @@ const DEFAULT_SETTINGS = {
   javaPath: ''
 };
 
+app.commandLine.appendSwitch('disable-http2');
+
 function resolveAssetPath(...segments) {
   const resourcePath = path.join(process.resourcesPath || '', ...segments);
   if (app.isPackaged && fs.existsSync(resourcePath)) return resourcePath;

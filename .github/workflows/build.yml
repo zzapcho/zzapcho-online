@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -18,3 +21,23 @@ jobs:
       - run: npm run manifest
       - run: npm run content:verify
       - run: npm run build
+      - name: Resolve release tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: release_tag
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: zzapcho-online ${{ steps.release_tag.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.exe
+            dist/*.yml
+            dist/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

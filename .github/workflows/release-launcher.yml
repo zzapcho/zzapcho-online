@@ -8,6 +8,8 @@ on:
         required: false
         type: string
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -48,8 +50,11 @@ jobs:
               VERSION="$(node -p "require('./package.json').version")"
               TAG="v${VERSION}"
             fi
-          else
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME}"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+            TAG="v${VERSION}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2

@@ -18,7 +18,7 @@
     "latestVersion": "1.2.6"
   },
   "sync": {
-    "deleteUnknownFiles": false,
+    "deleteUnknownFiles":true,
     "quarantineUnknownFiles": true,
     "protectedDirectories": [
       "mods",
